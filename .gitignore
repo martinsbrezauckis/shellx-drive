@@ -1,0 +1,19 @@
+/target/
+/output/
+node_modules/
+__pycache__/
+*.py[cod]
+/.scratch/
+/.release/
+/.shellx-drive-data/
+*.db
+*.db-shm
+*.db-wal
+.env
+*.log
+
+# Playwright CLI snapshot scratch (test-run form values incl. test creds — never commit)
+.playwright-cli/
+
+# Linked agent worktrees stay inside the canonical project root and never ship.
+.worktrees/

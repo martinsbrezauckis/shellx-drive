@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": true,
+    "icon": ["icons/icon.icns"],
+    "resources": [
+      "../../docs/public/MACOS_DESKTOP.md"
+    ],
+    "macOS": {
+      "bundleName": "ShellX Drive Desktop",
+      "entitlements": "entitlements.plist",
+      "hardenedRuntime": true,
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "Developer ID Application: Martins Brezauckis (4M329JW6R4)",
+      "dmg": {
+        "appPosition": { "x": 180, "y": 170 },
+        "applicationFolderPosition": { "x": 480, "y": 170 },
+        "windowSize": { "width": 660, "height": 400 }
+      }
+    }
+  }
+}

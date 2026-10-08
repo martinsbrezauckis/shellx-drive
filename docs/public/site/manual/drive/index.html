@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ShellX Drive Manual</title>
+    <meta name="description" content="Use ShellX Drive: install your server, manage files and workspaces, share with people and guests, sync your desktop, and recover files with revisions, trash, and backups." />
+    <meta name="robots" content="index,follow" />
+    <meta name="theme-color" content="#050505" />
+    <link rel="canonical" href="https://docs.theshellx.com/manual/drive/" />
+    <link rel="icon" href="../assets/icon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..700,0..100&family=JetBrains+Mono:wght@400;500&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="../manual.css?v=16" />
+    <link rel="stylesheet" href="./drive.css?v=1" />
+    <script src="./drive.js?v=1" defer></script>
+  </head>
+  <body class="manual-body drive-manual">
+    <a class="drive-skip" href="#manual-content">Skip to the manual</a>
+    <header class="manual-topbar">
+      <a class="manual-brand" href="../../"><span class="manual-mark">X</span><span>ShellX Docs</span></a>
+      <nav class="manual-topnav" aria-label="Docs products">
+        <a href="../shellx/">ShellX</a>
+        <a href="../cut/">Cut</a>
+        <a href="../motion/">Motion</a>
+        <a href="./" aria-current="page">Drive</a>
+      </nav>
+    </header>
+
+    <div class="manual-shell">
+      <aside class="manual-tree" aria-label="Drive manual sections">
+        <div class="manual-product">
+          <h2>ShellX Drive</h2>
+          <span class="manual-version" data-app-version="0.1.13">v0.1.13</span>
+        </div>
+        <label class="drive-search-label" for="manual-search">Find a section</label>
+        <input id="manual-search" class="manual-search" type="search" placeholder="Pair, share, restore…" autocomplete="off" aria-controls="manual-navigation" />
+        <p class="drive-search-status" aria-live="polite" data-search-status></p>
+        <button class="manual-button drive-nav-toggle" type="button" aria-expanded="true" aria-controls="manual-navigation" hidden data-nav-toggle>Browse the manual <span aria-hidden="true" data-nav-symbol>−</span></button>
+        <nav id="manual-navigation" aria-label="On this page" data-manual-navigation>
+          <details class="manual-folder" open>
+            <summary>Start</summary>
+            <a class="manual-node" href="#start">Choose your setup</a>
+            <a class="manual-node" href="#server-install">Install a server</a>
+            <a class="manual-node" href="#accounts">Accounts and 2FA</a>
+            <a class="manual-node" href="#workspaces">Workspaces and invitations</a>
+          </details>
+          <details class="manual-folder" open>
+            <summary>Files</summary>
+            <a class="manual-node" href="#files">Upload, find, and organize</a>
+            <a class="manual-node" href="#previews">Preview formats</a>
+            <a class="manual-node" href="#revisions">Revisions and comments</a>
+            <a class="manual-node" href="#trash">Trash and recovery</a>
+          </details>
+          <details class="manual-folder" open>
+            <summary>Sharing</summary>
+            <a class="manual-node" href="#sharing">People, groups, and roles</a>
+            <a class="manual-node" href="#guest-links">Guest links</a>
+            <a class="manual-node" href="#upload-drops">Receive guest uploads</a>
+          </details>
+          <details class="manual-folder" open>
+            <summary>Connected devices</summary>
+            <a class="manual-node" href="#desktop-install">Install the desktop app</a>
+            <a class="manual-node" href="#desktop-pairing">Pair and add Drive roots</a>
+            <a class="manual-node" href="#desktop-sync">Sync, reconnect, and review</a>
+            <a class="manual-node" href="#mobile">Drive on your phone</a>
+            <a class="manual-node" href="#webdav">WebDAV</a>
+          </details>
+          <details class="manual-folder" open>
+            <summary>Administration and help</summary>
+            <a class="manual-node" href="#backups">Back up and restore a server</a>
+            <a class="manual-node" href="#updates">Desktop and server updates</a>
+            <a class="manual-node" href="#agents">Use Drive with an agent</a>
+            <a class="manual-node" href="#help">Help and reference guides</a>
+          </details>
+        </nav>
+        <p class="manual-note">For the released Drive app and server. <a href="https://theshellx.com/drive/">Visit the product page</a>.</p>
+      </aside>
+
+      <main id="manual-content" class="manual-content" tabindex="-1">
+        <div class="manual-hero">
+          <p class="manual-eyebrow">Files · sharing · desktop sync</p>
+          <h1>ShellX Drive manual</h1>
+          <p>Keep your files on a server you control. Work in the browser, share with your team or guests, and sync selected folders to Windows, macOS, or Linux.</p>
+          <div class="manual-actions">
+            <a class="manual-button primary" href="https://theshellx.com/download/drive">Download Drive</a>
+            <a class="manual-button" href="#server-install">Set up a server</a>
+            <a class="manual-button" href="#desktop-pairing">Connect your desktop</a>
+          </div>
+        </div>
+
+        <figure class="drive-figure">
+          <div class="manual-surface"><img src="https://theshellx.com/drive/drive-workspace-dark-v2.webp" alt="ShellX Drive workspace with folders, files, search, and file details in the dark interface" width="1440" height="900" fetchpriority="high" /></div>
+          <figcaption>Browse a workspace, select a file, and use its details panel to preview, share, download, or open its history.</figcaption>
+        </figure>
+
+        <section id="start" class="manual-section" aria-labelledby="start-heading">
+          <h2 id="start-heading" tabindex="-1">Choose your setup</h2>
+          <p>If your organization already runs Drive, get its HTTPS address and an account from the server administrator. Open that address in a current browser and sign in. Install the desktop app when you want selected Drive roots available in a local folder.</p>
+          <p>To run your own Drive, install the Linux server package, connect a dedicated HTTPS hostname, and create the first administrator. The server includes its browser app and runs independently of the other ShellX products.</p>
+          <div class="manual-callout">
+            <h3>Choose how to store confidential content</h3>
+            <p>Drive stores server-readable file bodies so it can provide previews, content search, sharing, and WebDAV. Server and host administrators can read those files and backups. Encrypt a payload locally before uploading it when its contents should stay confidential from the host, and keep its encryption keys with you.</p>
+          </div>
+          <p class="drive-related">Next: <a href="#server-install">install a server</a>, <a href="#accounts">sign in and enable 2FA</a>, or <a href="#files">start working with files</a>.</p>
+        </section>
+
+        <section id="server-install" class="manual-section" aria-labelledby="server-install-heading">
+          <h2 id="server-install-heading" tabindex="-1">Install a server</h2>
+          <p>The release package targets a Linux x86-64 host with systemd, Bash, standard GNU tools, and a compatible runtime. Use the maintained release installer for a production server. Host compatibility follows the package’s runtime and service requirements.</p>
+          <ol>
+            <li><strong>Choose a dedicated HTTPS origin.</strong> For example, <code>https://drive.example.com</code>. Arrange DNS, TLS, and a host-specific route through the reverse proxy or tunnel you administer.</li>
+            <li><strong>Check the host.</strong> Follow the preflight in the <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/FIRST_INSTALL.md">first-install guide</a>. Existing Drive configuration, data, or a Drive listener calls for the upgrade or recovery procedure.</li>
+            <li><strong>Authenticate the release package.</strong> Download the <a href="https://theshellx.com/download/drive/server">server package</a> and its published verification material. Follow the <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/packaging/README.md">package guide</a> to verify the checksum and publisher attestation, then extract it into the protected installation stage.</li>
+            <li><strong>Run the installer’s dry-run, then install.</strong> Supply your final HTTPS origin with <code>--public-base-url</code>. The installer creates a private service account, protected configuration, setup token, data directory, and <code>shellx-drive.service</code>.</li>
+            <li><strong>Route HTTPS to Drive.</strong> The installed service binds to <code>127.0.0.1:5758</code> by default. Add the dedicated hostname to your existing proxy or tunnel and choose an upload request-body limit that fits your use.</li>
+            <li><strong>Check the service.</strong> Confirm <code>shellx-drive.service</code> is active, then open <code>/health</code> and <code>/ready</code> at the public origin. A healthy installation reports <code>ok:true</code> and <code>ready:true</code>.</li>
+            <li><strong>Create the first administrator.</strong> Retrieve the setup token using the root-only command printed by the installer. Open the HTTPS address and enter the token, administrator email, password twice, and first workspace name.</li>
+          </ol>
+          <p>From the verified protected package stage prepared by the package guide, use your final hostname in place of the example:</p>
+          <pre class="drive-command"><code>sudo "$stage/root/install.sh" --dry-run \
+  --public-base-url https://drive.example.com
+sudo "$stage/root/install.sh" \
+  --public-base-url https://drive.example.com
+sudo systemctl is-active shellx-drive.service</code></pre>
+          <p>After creating the administrator, sign out and sign back in, enable 2FA, and try an ordinary upload, preview, download, share, and revoke. First-account setup closes once an account exists. Set up and validate a backup before inviting users.</p>
+          <p class="drive-related">Complete commands and proxy examples: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/FIRST_INSTALL.md">First install</a> · <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/OPERATIONS.md">Operations</a>.</p>
+        </section>
+
+        <section id="accounts" class="manual-section" aria-labelledby="accounts-heading">
+          <h2 id="accounts-heading" tabindex="-1">Accounts and 2FA</h2>
+          <p>Sign in with the email and password for your Drive account. When your account requires two-factor authentication, enter a current authenticator code or one of your recovery codes in the second-factor field.</p>
+          <h3>Set up an authenticator</h3>
+          <ol>
+            <li>Open <strong>Account → Settings → Two-factor authentication</strong>.</li>
+            <li>Enter the required account confirmation and choose <strong>Set up 2FA</strong>.</li>
+            <li>Scan the QR code in your authenticator, or enter the setup secret there.</li>
+            <li>Enter the authenticator’s current code and choose <strong>Enable 2FA</strong>.</li>
+            <li>Save the recovery codes in protected storage so you can sign in if you lose the authenticator.</li>
+          </ol>
+          <p>Settings also provides password changes, recovery-code controls, and session management. Review your recent sign-in activity and revoke a session you no longer use. If you need a password-reset link, contact your server administrator for the one-time recovery link.</p>
+          <p>Server administrators create accounts in the administration account controls. Workspace access and item sharing are granted separately, so an account can receive the access appropriate to its work.</p>
+        </section>
+
+        <section id="workspaces" class="manual-section" aria-labelledby="workspaces-heading">
+          <h2 id="workspaces-heading" tabindex="-1">Workspaces and invitations</h2>
+          <p>A workspace holds a folder tree and its files. Choose a workspace to browse its contents. Your administrator can create workspaces; workspace owners manage their membership and lifecycle in <strong>Workspace settings</strong>.</p>
+          <table class="manual-api-table">
+            <caption>Workspace roles</caption>
+            <thead><tr><th scope="col">Role</th><th scope="col">Use it for</th></tr></thead>
+            <tbody>
+              <tr><td>Can view / Viewer</td><td>Browse, preview, and download workspace files.</td></tr>
+              <tr><td>Can edit / Editor</td><td>Read access plus creating and changing files and folders.</td></tr>
+              <tr><td>Owner</td><td>Manage workspace membership, settings, ownership, and lifecycle.</td></tr>
+            </tbody>
+          </table>
+          <h3>Invite a collaborator</h3>
+          <ol>
+            <li>As a workspace owner, open <strong>Workspace settings → Members</strong>.</li>
+            <li>Enter the collaborator’s account email, choose <strong>Can view</strong>, <strong>Can edit</strong>, or <strong>Owner</strong>, and select the access duration when available.</li>
+            <li>Choose <strong>Invite</strong>, then <strong>Copy link</strong>. Deliver that one-time link to the intended person through your chosen private communication channel.</li>
+            <li>The recipient signs in to the Drive account matching the invited email, opens the link, chooses <strong>Check sign-in</strong> if needed, and accepts.</li>
+          </ol>
+          <p>The pending invitation list offers <strong>New link</strong> and <strong>Cancel</strong>. A new link replaces the invitation link you previously delivered. Use the member list to review current access. Workspace owners can also rename, archive, unarchive, transfer ownership, or leave through the available workspace controls.</p>
+          <p>For access to just one file or folder, use <a href="#sharing">item sharing</a>. Workspace membership supplies workspace browsing and WebDAV access.</p>
+        </section>
+
+        <section id="files" class="manual-section" aria-labelledby="files-heading">
+          <h2 id="files-heading" tabindex="-1">Upload, find, and organize</h2>
+          <h3>Add files and folders</h3>
+          <p>Open the destination workspace and folder. Choose <strong>Upload → Upload files</strong> or <strong>Upload folder</strong>, or drop files into the browser’s file area. Use <strong>New → New folder</strong> to create a folder. Drive supports resumable uploads up to 2 GiB; keep the upload view open and follow its progress until completion.</p>
+          <h3>Find the file you need</h3>
+          <p>Use <strong>Search files</strong> to search names and indexed extracted text. Browse <strong>Recent</strong>, use stars and labels to organize recurring work, and apply the available filters in <strong>My files</strong> or <strong>Recent</strong>. Shared views show the items granted by their owners.</p>
+          <h3>Work with a selection</h3>
+          <p>Select a file or folder to open its details and actions. Use <strong>Preview</strong>, <strong>Download</strong>, <strong>Copy</strong>, or <strong>Move to trash</strong>. <strong>Download folder</strong> exports a folder as a ZIP. Selecting several items exposes batch actions, including ZIP download, move, trash, and restore where available.</p>
+          <p>Open <strong>Rename, move &amp; history</strong> to change the name, parent folder, labels, or metadata, then choose <strong>Save details</strong>. Use <strong>Move to…</strong> to select a destination. When a destination name is occupied, choose the offered collision resolution and check the resulting name and location.</p>
+          <p>For a text edit, select the file, choose <strong>Open for editing</strong>, edit its content, and select <strong>Save local edit</strong>. Drive records content changes in revision history and preserves a conflict copy when competing changes need reconciliation.</p>
+        </section>
+
+        <section id="previews" class="manual-section" aria-labelledby="previews-heading">
+          <h2 id="previews-heading" tabindex="-1">Preview formats</h2>
+          <p>Select a file and choose <strong>Preview</strong> to open its viewer. Drive chooses the viewer from the extension, ignoring letter case.</p>
+          <table class="manual-api-table drive-formats">
+            <caption>Signed-in file viewer</caption>
+            <thead><tr><th scope="col">Format</th><th scope="col">Extensions</th><th scope="col">View</th></tr></thead>
+            <tbody>
+              <tr><td>Images</td><td><code>.png .jpg .jpeg .gif .webp .bmp .ico</code></td><td>Image</td></tr>
+              <tr><td>PDF</td><td><code>.pdf</code></td><td>Browser PDF viewer</td></tr>
+              <tr><td>Video</td><td><code>.mp4 .webm .mov</code></td><td>Video player</td></tr>
+              <tr><td>Audio</td><td><code>.mp3 .wav .ogg</code></td><td>Audio player</td></tr>
+              <tr><td>Markdown</td><td><code>.md .markdown</code></td><td>Formatted Markdown using Drive’s supported subset</td></tr>
+              <tr><td>Text, data, and code</td><td><code>.txt .log .rtf .csv .tsv .json .xml .yaml .yml .toml .js .ts .py .rs .go .sh .css</code></td><td>Plain text; RTF source and CSV/TSV data appear as text</td></tr>
+            </tbody>
+          </table>
+          <p>Text and Markdown previews accept UTF-8 files up to <strong>256 KiB (262,144 bytes)</strong>. Image display and audio/video playback use your browser’s decoders and depend on its support for the file’s encoding. PDF display uses the browser’s PDF viewer.</p>
+          <h3>Inspector previews and content search</h3>
+          <table class="manual-api-table">
+            <caption>Generated inspector previews</caption>
+            <thead><tr><th scope="col">Preview</th><th scope="col">Formats and size</th></tr></thead>
+            <tbody>
+              <tr><td>Image thumbnail</td><td><code>.gif .jpg .jpeg .png .webp</code>, up to 512 × 512 pixels.</td></tr>
+              <tr><td>Text excerpt</td><td>First 240 extracted characters from UTF-8 text, <code>.docx .xlsx .pptx</code>, and <code>.odt .ods .odp</code>.</td></tr>
+            </tbody>
+          </table>
+          <p>Generated previews process files up to <strong>32 MiB</strong>, with additional image-decoding and Office-extraction limits. Drive indexes bounded extracted text from UTF-8 files and these Office packages. Text-bearing PDFs have best-effort extracted-text search.</p>
+          <p>Use Office excerpts to find and inspect documents, then download and open the original in its application for page layout, formulas, comments, embedded media, and editing. Legacy <code>.doc .xls .ppt</code> files are available for download; use Open XML or OpenDocument packages for extracted-text previews and search.</p>
+          <h3>Guest media previews</h3>
+          <p>Guest links preview images with <code>.bmp .gif .jpeg .jpg .png .webp</code> and video with <code>.mov .mp4 .webm</code>. Guest video playback uses the recipient’s browser and its supported codecs.</p>
+          <p class="drive-related">Complete format reference: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/SUPPORT_AND_COMPATIBILITY.md">Support and compatibility</a>.</p>
+        </section>
+
+        <section id="revisions" class="manual-section" aria-labelledby="revisions-heading">
+          <h2 id="revisions-heading" tabindex="-1">Revisions and comments</h2>
+          <p>Select a file, expand <strong>Rename, move &amp; history</strong>, and choose <strong>Load revisions</strong>. Select the revision you want to inspect.</p>
+          <ul>
+            <li><strong>Download</strong> saves the selected historical body for inspection.</li>
+            <li><strong>Restore revision</strong> restores that body as a new current version while keeping existing history.</li>
+            <li><strong>Pin</strong> protects a revision from ordinary retention pruning; <strong>Unpin</strong> makes it eligible again.</li>
+            <li><strong>Delete</strong> removes the chosen historical revision when permitted. <strong>Prune by policy</strong> applies the configured history policy.</li>
+          </ul>
+          <p>Use the file’s <strong>Comments</strong> area to add a comment, reply to a discussion, or resolve it through the available controls. Invitations, shares, comments, uploads to drops, and sync conflicts can appear in the notification inbox. Mark notifications read as you finish reviewing them.</p>
+        </section>
+
+        <section id="trash" class="manual-section" aria-labelledby="trash-heading">
+          <h2 id="trash-heading" tabindex="-1">Trash and recovery</h2>
+          <p><strong>Move to trash</strong> removes an item from ordinary browsing while keeping it available for recovery. Open <strong>Trash</strong>, select the item, and choose <strong>Restore</strong> to recover it. Batch restore is available for multiple selected items.</p>
+          <p><strong>Delete permanently</strong> and <strong>Empty trash</strong> permanently remove selected recoverable items after the required confirmation. Review the selection before confirming. Workspace retention can also clear old trashed files and unpinned revisions according to the administrator’s policy.</p>
+          <p>A desktop deletion is reviewed separately in the sync app. Follow the <a href="#desktop-sync">desktop review flow</a> to choose whether to restore or propagate that deletion. Use <a href="#revisions">revision history</a> for an earlier file body and a <a href="#backups">server backup</a> for server-wide content recovery.</p>
+        </section>
+
+        <section id="sharing" class="manual-section" aria-labelledby="sharing-heading">
+          <h2 id="sharing-heading" tabindex="-1">People, groups, and roles</h2>
+          <p>Select a file or folder and open <strong>Share</strong> to manage access. Item sharing gives a person or group access to that item while keeping one canonical file; recipients work with the same item and its revisions.</p>
+          <ol>
+            <li>In the people-and-groups controls, choose the principal type and search by an account email or email prefix.</li>
+            <li>Select the matching enabled account or group from the results.</li>
+            <li>Choose <strong>Viewer</strong> for reading and downloading, or <strong>Editor</strong> for reading and changing content. Set an expiry when appropriate, then add access.</li>
+            <li>Review the listed grants. Change a direct role or use <strong>Remove</strong> to revoke direct access.</li>
+          </ol>
+          <p>Recipients find granted items in <strong>Shared with me</strong>. Owners use <strong>Shared by me</strong> to review outgoing sharing. A shared Viewer desktop root downloads only; an Editor root supports authorized changes. Workspace membership is the route to workspace-wide and WebDAV access.</p>
+          <p><strong>Everyone in this Drive</strong> is an explicit grant to the Drive-wide principal. If the server administrator enables that policy, choose the role and confirm everyone access in the sharing drawer. Use it when the selected item should be available across the Drive.</p>
+          <p>Removing a grant stops future server access through that grant. Files already downloaded to a recipient’s device remain there, and any other active grant or membership continues to supply its own access.</p>
+        </section>
+
+        <section id="guest-links" class="manual-section" aria-labelledby="guest-links-heading">
+          <h2 id="guest-links-heading" tabindex="-1">Guest links</h2>
+          <p>Use a guest link to let someone view a file or folder without a Drive account. Guest links provide read-only access; use a separate <a href="#upload-drops">upload drop</a> to receive files.</p>
+          <ol>
+            <li>Select the file or folder, open its sharing controls, and expand <strong>Link settings</strong>.</li>
+            <li>Choose an optional password, a message for guests, a maximum visit count, and whether to <strong>Allow guests to download</strong>.</li>
+            <li>Choose the expiry: one hour, 24 hours, seven days, 30 days, or <strong>Never</strong>.</li>
+            <li>Select <strong>Create guest link</strong>, copy the returned link, and deliver it to your intended recipients. Deliver a password separately when you use one.</li>
+          </ol>
+          <p>Recipients open the link, enter its password when requested, browse the allowed item, and use the available preview or download action. The guest viewer supports the image and video formats listed in <a href="#previews">Preview formats</a>.</p>
+          <p>Use the link-management controls to review activity, change the supported settings, or revoke a link. Revocation ends future access through that link. A downloaded copy remains with the recipient.</p>
+        </section>
+
+        <section id="upload-drops" class="manual-section" aria-labelledby="upload-drops-heading">
+          <h2 id="upload-drops-heading" tabindex="-1">Receive guest uploads</h2>
+          <p>An upload drop gives guests a dedicated place to submit files to a workspace. Open the authorized <strong>Drops</strong> controls for that workspace, enter a drop name and optional password, and choose <strong>Create drop</strong>.</p>
+          <p>Select <strong>Copy drop link</strong> and deliver the link to contributors. Guests open it, complete its access prompt, choose their files, and wait for upload completion. A drop link supplies upload access to its destination.</p>
+          <p>In the drop-management list, select a drop to change its supported name, password, expiry, or limits. Review received files in the workspace and revoke the drop when collection is complete. Drive can notify the recipient when a drop receives an upload.</p>
+        </section>
+
+        <section id="desktop-install" class="manual-section" aria-labelledby="desktop-install-heading">
+          <h2 id="desktop-install-heading" tabindex="-1">Install the desktop app</h2>
+          <p>Use the signed desktop package from the official Drive release and the matching platform guide. Get your server’s HTTPS address and an existing account before pairing.</p>
+          <table class="manual-api-table">
+            <caption>Choose your desktop package</caption>
+            <thead><tr><th scope="col">Platform</th><th scope="col">Install and verify</th></tr></thead>
+            <tbody>
+              <tr><td><a href="https://theshellx.com/download/drive/windows">Windows x86-64</a></td><td>Verify the installer checksum and its valid Digital Signature against the published manifest’s publisher identity. Run the NSIS installer, then launch ShellX Drive Desktop. Setup can install Microsoft WebView2 when needed.</td></tr>
+              <tr><td><a href="https://theshellx.com/download/drive/macos">macOS arm64</a></td><td>Verify the package’s Developer ID signature, notarization, staple, and Gatekeeper acceptance. Install it and launch ShellX Drive Desktop from Applications.</td></tr>
+              <tr><td>Linux x86-64: <a href="https://theshellx.com/download/drive/linux-deb">Debian package</a> or <a href="https://theshellx.com/download/drive/linux-appimage">AppImage</a></td><td>Verify the matching updater signature with the authenticated Drive public key and check the checksum. Install the Debian package with your package manager, or keep the AppImage in a stable user-owned folder, make it executable, and run it.</td></tr>
+            </tbody>
+          </table>
+          <p>Linux needs GTK 3, WebKitGTK 4.1, an Ayatana or compatible AppIndicator tray runtime, and an ordinary-user graphical session with Secret Service. Use a compatible package manager for the Debian package or working AppImage mounting support for the AppImage. Run the desktop as your ordinary user.</p>
+          <p class="drive-related">Installation details: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/WINDOWS_DESKTOP.md">Windows</a> · <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/MACOS_DESKTOP.md">macOS</a> · <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/LINUX_DESKTOP.md">Linux</a>.</p>
+        </section>
+
+        <section id="desktop-pairing" class="manual-section" aria-labelledby="desktop-pairing-heading">
+          <h2 id="desktop-pairing-heading" tabindex="-1">Pair and add Drive roots</h2>
+          <p>Drive connects one signed-in server and account to one chosen local base folder. Up to <strong>100 selected roots</strong> can sync below that folder, with separate safe child folders for owned and shared locations.</p>
+          <ol>
+            <li>Prepare a dedicated, empty, ordinary local folder for Drive, separate from other sync tools’ folders.</li>
+            <li>In the desktop app, enter the server’s HTTPS origin and select <strong>Validate</strong>. Complete first-administrator setup in the browser first if the server requests it.</li>
+            <li>Sign in with your account. Enter a TOTP or recovery code when requested.</li>
+            <li>Browse the available owned and shared roots, using the additional pages when needed, and select the first root.</li>
+            <li>Use the native <strong>Choose folder</strong> dialog to select the empty local base and confirm <strong>Connect and start syncing</strong>.</li>
+            <li>Wait for <strong>Synced</strong>, then check a small file from each side. A Viewer root supports checking downloads; an editable root supports both directions.</li>
+          </ol>
+          <p>Use <strong>Add Drive root</strong> to select another accessible root. Newly granted roots become available for selection; add each one explicitly. <strong>Current status details</strong> shows the chosen root’s summary while every configured root continues syncing.</p>
+          <p>Keep independent regular files in managed roots. If a symbolic link, reparse point, hard link, or ambiguous path needs review, inspect it and replace it with an ordinary copied file when you want its content synced.</p>
+          <figure class="drive-figure drive-figure--desktop">
+            <div class="manual-surface"><img src="https://theshellx.com/drive/drive-desktop-dark-v2.webp" alt="ShellX Drive desktop app showing sync status, activity, and the local-folder controls" width="720" height="850" loading="lazy" /></div>
+            <figcaption>The desktop app keeps the selected root’s status, activity, and review actions together.</figcaption>
+          </figure>
+        </section>
+
+        <section id="desktop-sync" class="manual-section" aria-labelledby="desktop-sync-heading">
+          <h2 id="desktop-sync-heading" tabindex="-1">Sync, reconnect, and review</h2>
+          <p>Work inside the managed child folders. Drive compares and syncs configured roots automatically while it is running. Use <strong>Open folder</strong> to reach your local files, <strong>Sync now</strong> to request a pass, and <strong>Pause</strong> or <strong>Resume</strong> to control transfers. The <strong>Launch at login</strong> setting starts Drive with your desktop session.</p>
+          <table class="manual-api-table">
+            <caption>Read the desktop status</caption>
+            <thead><tr><th scope="col">Status</th><th scope="col">What to do</th></tr></thead>
+            <tbody>
+              <tr><td>Synced</td><td>The last complete comparison converged. Use this state to check completion of a requested pass.</td></tr>
+              <tr><td>Syncing</td><td>A sync pass is active. Wait for its terminal status.</td></tr>
+              <tr><td>Paused</td><td>Choose Resume when you are ready for automatic transfers.</td></tr>
+              <tr><td>Offline</td><td>Continue local work, restore connectivity, and choose Retry now.</td></tr>
+              <tr><td>Needs reconnect</td><td>Use Reconnect to sign in again. Pairing and local files are retained.</td></tr>
+              <tr><td>Needs review</td><td>Open the pending decisions and choose the action for the named file or folder.</td></tr>
+              <tr><td>Error</td><td>Follow the displayed recovery action and retry when its requirement is resolved.</td></tr>
+            </tbody>
+          </table>
+          <h3>Resolve a conflict or deletion</h3>
+          <p>Competing edits preserve both bodies and enter <strong>Needs review</strong>. Use <strong>Open folder</strong> to inspect the named files and conflict copy, reconcile the intended content or safely rename it, and choose <strong>Recheck review</strong>. Deletion reviews offer explicit actions according to the item’s state and your current access.</p>
+          <table class="manual-api-table">
+            <caption>Deletion review actions, when offered</caption>
+            <thead><tr><th scope="col">Action</th><th scope="col">Result</th></tr></thead>
+            <tbody>
+              <tr><td>Move to Drive trash</td><td>Apply a local file deletion to Drive’s recoverable trash.</td></tr>
+              <tr><td>Restore local copy</td><td>Recover the local copy from Drive.</td></tr>
+              <tr><td>Move local copy to recovery</td><td>Remove the copy from the managed location while keeping it in local recovery.</td></tr>
+              <tr><td>Restore to Drive</td><td>Recover the Drive item from the retained local copy.</td></tr>
+            </tbody>
+          </table>
+          <p>Read the confirmation for the named item and its affected descendants before applying a deletion review. Folder reviews keep their own available recovery choices.</p>
+          <p>Use <strong>Recheck review</strong> after inspecting or safely renaming an item to refresh its pending decision. If the decision belongs to another configured root, open Settings and select that root’s status details. Each review stays attached to its own managed files.</p>
+          <p>While offline, keep your edits inside the managed root. Reconnect and let Drive compare them before editing the same paths on another device. Shared Viewer roots download only; local changes stay available for review. Revoked roots stop remote syncing and retain their local bytes.</p>
+          <h3>Disconnect a device</h3>
+          <p>Before changing server or account, open Settings and choose <strong>Disconnect this PC</strong>. Drive first stops active synchronization safely and retires the saved connection. A confirmed disconnect removes the saved credential and connection metadata while keeping your local synced files.</p>
+          <p>Keep the server reachable during retirement. If the app reports that retirement is unconfirmed, use its retry action and keep the saved state in place until it completes.</p>
+        </section>
+
+        <section id="mobile" class="manual-section" aria-labelledby="mobile-heading">
+          <h2 id="mobile-heading" tabindex="-1">Drive on your phone</h2>
+          <p>Open your Drive HTTPS address in the phone’s browser. Use the responsive file view, upload controls, camera upload where offered, and the selected-file actions for opening, sharing, and comments. You can install the web app through a browser that supports PWA installation.</p>
+          <p><strong>Mark for mobile download</strong> records which files you intend to download. The web app’s saved file list is metadata-only. Use the explicit download action to save file bodies to your device and manage those downloaded files through the device’s normal storage controls.</p>
+        </section>
+
+        <section id="webdav" class="manual-section" aria-labelledby="webdav-heading">
+          <h2 id="webdav-heading" tabindex="-1">WebDAV</h2>
+          <p>Use a client that supports HTTPS WebDAV with bearer-token authentication. Your workspace endpoint is <code>https://drive.example.com/dav/{workspace_id}</code>; folders and files use nested paths below it.</p>
+          <ol>
+            <li>Identify the workspace you can access and its ID using the authenticated API.</li>
+            <li>Configure the endpoint and a protected user session or account-wide delegated credential in your client.</li>
+            <li>Browse and download with workspace read access. Create folders, upload, rename, move, copy, or trash items with workspace write access.</li>
+            <li>Keep move and copy destinations inside the same workspace.</li>
+          </ol>
+          <p>Drive supports <code>OPTIONS</code>, <code>PROPFIND</code>, <code>GET</code>, <code>PUT</code>, <code>MKCOL</code>, <code>DELETE</code>, <code>MOVE</code>, <code>COPY</code>, and exclusive write <code>LOCK</code>/<code>UNLOCK</code> on existing resources. WebDAV deletion follows Drive’s normal trash path.</p>
+          <p>Workspace membership supplies WebDAV access. An item-only grant can be used through that item’s sharing and desktop-root flows.</p>
+          <p class="drive-related">Authentication and operation details: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/API.md#webdav">WebDAV API reference</a>.</p>
+        </section>
+
+        <section id="backups" class="manual-section" aria-labelledby="backups-heading">
+          <h2 id="backups-heading" tabindex="-1">Back up and restore a server</h2>
+          <p>Server administrators manage whole-server recovery in <strong>Server administration → Backups</strong>. A backup contains the content and catalog for every workspace. Use revisions or trash for an individual file recovery.</p>
+          <ol>
+            <li>Choose <strong>Create server backup</strong> and wait for its job to succeed.</li>
+            <li>Select the completed generation and choose <strong>Check selected backup</strong>. Wait for validation to succeed.</li>
+            <li>Choose <strong>Download a copy</strong> and store the complete <code>.sxdbackup</code> archive in protected off-host storage.</li>
+            <li>Use <strong>Automatic backups</strong> to enable an hourly, daily, or weekly schedule and choose how many completed archives remain on the server.</li>
+          </ol>
+          <p>Creation, validation, and restore run as jobs. <strong>Queued</strong> and <strong>Running</strong> are pending; check the completed result before relying on the archive or recovery. Scheduled generations are followed by integrity validation.</p>
+          <h3>Restore content</h3>
+          <p>Validate the selected archive, arrange a maintenance window, and choose <strong>Restore whole server</strong> with the required confirmation. Ordinary writes pause during restore. Wait for the restore job to succeed, then check readiness and the recovered workspace content.</p>
+          <p>Restore recovers archived content and catalog data while preserving the target server’s current account and access authority. On a fresh target, create its administrator and explicitly grant workspace access after restoring. Follow the operations guide for importing the archive and performing an off-host restore drill.</p>
+          <div class="manual-callout">
+            <h3>Protect every backup copy</h3>
+            <p>Backups are unencrypted, operator-readable restore material, including server data and stored file bodies. Protect them with your storage controls, such as encrypted disks and an encrypted off-host destination. Keep a verified off-host copy and exercise its restore procedure.</p>
+          </div>
+          <p class="drive-related">Complete recovery procedure: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/OPERATIONS.md#backup-and-restore-runbook">Backup and restore runbook</a>.</p>
+        </section>
+
+        <section id="updates" class="manual-section" aria-labelledby="updates-heading">
+          <h2 id="updates-heading" tabindex="-1">Desktop and server updates</h2>
+          <h3>Update the desktop</h3>
+          <p>The desktop app checks the official signed update manifest after launch. Open <strong>Settings → Desktop app</strong>, choose <strong>Review update</strong>, check the target version and publisher guidance, then choose <strong>Download and install</strong> to approve that exact update.</p>
+          <p>The app reports download progress and verifies the signed package before handing it to the platform installer. On Windows, macOS, and Linux, use the authenticated platform package and verification requirements described in the <a href="#desktop-install">installation guides</a>.</p>
+          <p>If you enable remote agent control for an enrolled desktop, the authenticated account owner or an account-wide delegated agent can authorize an exact checked, signed update on that device. Grant this access to operators you trust to make that installation choice.</p>
+          <h3>Update the server</h3>
+          <p>Server administrators review the server release notice and package links. First create a backup and wait for success. Authenticate and stage the new release through the maintained package procedure, stop the active service at the documented step, and run the verified installer from its protected stage. The upgrade retains the configured data root and public origin.</p>
+          <p>After the installer restarts the service, check its active state, running version, <code>/health</code>, and <code>/ready</code>, then check ordinary file access. Keep the pre-upgrade backup available through verification.</p>
+          <p class="drive-related">Exact sequence: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/OPERATIONS.md#upgrade-procedure">Server upgrade procedure</a>.</p>
+        </section>
+
+        <section id="agents" class="manual-section" aria-labelledby="agents-heading">
+          <h2 id="agents-heading" tabindex="-1">Use Drive with an agent</h2>
+          <p>Drive’s authenticated HTTP API supports automation of files, workspaces, sharing, sync, and authorized administration. Give your agent the public <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/skill/shellx-drive/SKILL.md">ShellX Drive skill</a> and its endpoint reference.</p>
+          <p>Choose a folder-scoped View or Edit grant for work inside one shared subtree. Use an account-wide delegation when an agent needs your ordinary account-wide operations. Manage account-wide credentials in <strong>Account → Settings → Account-wide AI agents</strong>; keep the one-time token in protected credential storage and rotate or revoke it through its controls.</p>
+          <h3>Example requests to your agent</h3>
+          <ul>
+            <li>“Find the project notes in my accessible workspaces and download the selected file.”</li>
+            <li>“Upload these files into the Reports folder, then verify their names and contents.”</li>
+            <li>“Give this enabled account Viewer access to the selected folder until the agreed expiry, then verify the grant.”</li>
+            <li>“List my selected desktop’s pending sync reviews so I can choose how to resolve them.”</li>
+          </ul>
+          <p>Authorize the intended actions and have the agent check each returned result through an allowed metadata, content, activity, or settings readback. Administrator operations require current administrator authority; account passwords, MFA, and action-specific confirmations remain part of their corresponding flows.</p>
+          <p class="drive-related">Public references: <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/skill/shellx-drive/reference.md">Agent endpoint reference</a> · <a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/API.md">HTTP API</a>.</p>
+        </section>
+
+        <section id="help" class="manual-section" aria-labelledby="help-heading">
+          <h2 id="help-heading" tabindex="-1">Help and reference guides</h2>
+          <p>For help, include the installed app or server version, platform, status or error wording, timestamp with time zone, server hostname, and clear reproduction steps. Keep passwords, authenticator and recovery codes, session values, credential-store contents, and share links in their protected account flows.</p>
+          <p>Contact your server administrator for account access, password recovery, grants, server maintenance, and backups. Use the repository’s issue templates for ordinary product bugs and feature requests. For a vulnerability report, follow the repository’s security policy.</p>
+          <ul class="drive-reference-list">
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive">Source and issue templates</a></li>
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/FIRST_INSTALL.md">First server installation</a></li>
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/SUPPORT_AND_COMPATIBILITY.md">Support, runtime compatibility, and preview formats</a></li>
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/OPERATIONS.md">Server operations and recovery</a></li>
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/CONFIG.md">Server configuration</a></li>
+            <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/SECURITY.md">Security reporting policy</a></li>
+          </ul>
+          <p class="manual-note">This manual covers ShellX Drive v0.1.13. Downloads resolve through the official Drive download routes.</p>
+          <div class="manual-actions"><a class="manual-button" href="#manual-content">Back to the top</a><a class="manual-button" href="https://theshellx.com/drive/">ShellX Drive</a></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "bytes": "Harmless signed installer fixture, never an executable.",
+  "publicKey": "dW50cnVzdGVkIGNvbW1lbnQ6IFNoZWxsWCBEcml2ZSB0ZXN0IGZpeHR1cmUgb25seQpSV1JrY21sMlpXWnBlSkpVSmFlTy9OYS9qaXBvUFo4Uk9kbmJLaEpWYkhDRVpBYmNKRTNROE9lVAo=",
+  "releases": [
+    {
+      "platform": "windows-x86_64-nsis",
+      "url": "https://example.test/releases/v1.1.0/ShellX%20Drive%20Desktop_1.1.0_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRlc3QgZml4dHVyZSBrZXkKUlVSa2NtbDJaV1pwZVBZdDNnenE0amp6a0JHbGdWeTZaV3dFZnhMU1FJcU11KzZLSFR5REJVL25lSDdMbUFxWXNHcmFhTTZzaFFNdUhBNk00VWVVQnphZmVNSFpNS3JFSkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4OTEyMDAwCWZpbGU6U2hlbGxYIERyaXZlIERlc2t0b3BfMS4xLjBfeDY0LXNldHVwLmV4ZQpHQTg0TDh5ZC9FbmFPcXRXV1ZZU0hvd0hUSzBsbldZWVE4Vm9qdmd1UDdlN1J4c2owVlR6ZnZiQUt6S25nekoxVk10ZFowRC90SlJEZTZPTHlTTTlCQT09Cg=="
+    },
+    {
+      "platform": "darwin-aarch64-app",
+      "url": "https://example.test/releases/v1.1.0/ShellX%20Drive%20Desktop_1.1.0_aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRlc3QgZml4dHVyZSBrZXkKUlVSa2NtbDJaV1pwZVBZdDNnenE0amp6a0JHbGdWeTZaV3dFZnhMU1FJcU11KzZLSFR5REJVL25lSDdMbUFxWXNHcmFhTTZzaFFNdUhBNk00VWVVQnphZmVNSFpNS3JFSkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4OTEyMDAwCWZpbGU6U2hlbGxYIERyaXZlIERlc2t0b3BfMS4xLjBfYWFyY2g2NC5hcHAudGFyLmd6CnFzMGIvTUZZYVdEQTVpV0dTeGFDSEpRRjlXTzk2WUJlMGc4Znk4LzNWaytUSW5KZDk4ZWZocDNLNFpQMGQ1TFJlRUpubE05SzhEcklkdGVyOGVCc0JRPT0K"
+    },
+    {
+      "platform": "linux-x86_64-appimage",
+      "url": "https://example.test/releases/v1.1.0/ShellX_Drive_1.1.0_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRlc3QgZml4dHVyZSBrZXkKUlVSa2NtbDJaV1pwZVBZdDNnenE0amp6a0JHbGdWeTZaV3dFZnhMU1FJcU11KzZLSFR5REJVL25lSDdMbUFxWXNHcmFhTTZzaFFNdUhBNk00VWVVQnphZmVNSFpNS3JFSkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4OTEyMDAwCWZpbGU6U2hlbGxYX0RyaXZlXzEuMS4wX2FtZDY0LkFwcEltYWdlCnlHZTJFV2lGRDl0NzBmQ2gzTFlBR3o2NWphbDBBd0RpUlpWem15cFc4K2JKUEpGVjlKelNNVWJ6elRUQ0RRYmd4SWx4RHFTLzQ5cG5jQnlnR2VXV0J3PT0K"
+    },
+    {
+      "platform": "linux-x86_64-deb",
+      "url": "https://example.test/releases/v1.1.0/shellx-drive_1.1.0_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRlc3QgZml4dHVyZSBrZXkKUlVSa2NtbDJaV1pwZVBZdDNnenE0amp6a0JHbGdWeTZaV3dFZnhMU1FJcU11KzZLSFR5REJVL25lSDdMbUFxWXNHcmFhTTZzaFFNdUhBNk00VWVVQnphZmVNSFpNS3JFSkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4OTEyMDAwCWZpbGU6c2hlbGx4LWRyaXZlXzEuMS4wX2FtZDY0LmRlYgpQN0llSStpUmtlbUNBMGxkTGV6NGJIN2lCTlZNOUtsTmtpL2ZUZVhoc1NwOXZDSGVVYWlKeU5kaEpmOVlhY0JJY3FkRDViWnFOd3hkV1RxUjFneEhCQT09Cg=="
+    }
+  ]
+}

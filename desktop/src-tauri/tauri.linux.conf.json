@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "enableGTKAppId": true
+  },
+  "bundle": {
+    "targets": ["deb", "appimage"],
+    "createUpdaterArtifacts": true,
+    "icon": ["icons/icon.png"],
+    "shortDescription": "Desktop sync for ShellX Drive",
+    "longDescription": "ShellX Drive Desktop synchronizes selected ShellX Drive locations to a user-chosen local folder.",
+    "category": "Utility",
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0t64 | libgtk-3-0",
+          "libayatana-appindicator3-1 | libappindicator3-1",
+          "libsecret-1-0"
+        ],
+        "files": {
+          "/usr/share/doc/shellx-drive-desktop/README.md": "../../docs/public/LINUX_DESKTOP.md"
+        }
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}

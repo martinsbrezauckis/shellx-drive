@@ -1,0 +1,221 @@
+name: release-candidate-attestation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: stable
+
+jobs:
+  linux-server-build:
+    name: Build Linux server candidate
+    if: >-
+      github.repository == 'martinsbrezauckis/shellx-drive' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.actor == github.repository_owner &&
+      github.ref == 'refs/heads/main' &&
+      github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify authorized release source
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Install current stable Rust toolchain
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt
+          rustup default "$RUSTUP_TOOLCHAIN"
+          rustc --version
+          cargo --version
+
+      - name: Verify exact source is unchanged
+        run: git diff --exit-code
+
+      - name: Verify formatting
+        id: format
+        continue-on-error: true
+        run: cargo fmt --check
+
+      - name: Build the Linux server candidate
+        id: build
+        continue-on-error: true
+        run: cargo build --locked --release --bin shellx-drive
+
+      - name: Report every candidate verification failure
+        if: ${{ always() }}
+        env:
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          status=0
+          for result in "$FORMAT_OUTCOME" "$BUILD_OUTCOME"; do
+            [[ "$result" == "success" ]] || status=1
+          done
+          exit "$status"
+
+      - name: Create exact binary handoff manifest
+        run: |
+          handoff_dir="$RUNNER_TEMP/shellx-drive-linux-build"
+          install -d -m 0700 "$handoff_dir"
+          install -m 0755 target/release/shellx-drive "$handoff_dir/shellx-drive"
+          binary_sha256="$(sha256sum "$handoff_dir/shellx-drive" | awk '{print $1}')"
+          {
+            printf 'schema=shellx-drive.binary-handoff/v1\n'
+            printf 'source_revision=%s\n' "$GITHUB_SHA"
+            printf 'binary_filename=shellx-drive\n'
+            printf 'binary_sha256=%s\n' "$binary_sha256"
+          } >"$handoff_dir/manifest"
+
+      - name: Upload exact binary handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shellx-drive-linux-build-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/shellx-drive-linux-build/shellx-drive
+            ${{ runner.temp }}/shellx-drive-linux-build/manifest
+          if-no-files-found: error
+          retention-days: 1
+
+  linux-server-package:
+    name: Package and attest Linux server candidate
+    needs: linux-server-build
+    if: >-
+      github.repository == 'martinsbrezauckis/shellx-drive' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.actor == github.repository_owner &&
+      github.ref == 'refs/heads/main' &&
+      github.ref_type == 'branch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify authorized release source
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Download exact binary handoff
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: shellx-drive-linux-build-${{ github.sha }}
+          path: ${{ runner.temp }}/shellx-drive-linux-build
+
+      - name: Verify binary handoff manifest
+        run: |
+          handoff_dir="$RUNNER_TEMP/shellx-drive-linux-build"
+          binary="$handoff_dir/shellx-drive"
+          manifest="$handoff_dir/manifest"
+          test -d "$handoff_dir"
+          test ! -L "$handoff_dir"
+          test -f "$binary" && test ! -L "$binary"
+          test -f "$manifest" && test ! -L "$manifest"
+          test -z "$(find "$handoff_dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
+          test "$(find "$handoff_dir" -mindepth 1 -maxdepth 1 -type f -printf . | wc -c)" -eq 2
+          binary_sha256="$(sha256sum "$binary" | awk '{print $1}')"
+          expected_manifest="$(mktemp "$RUNNER_TEMP/shellx-drive-binary-handoff.XXXXXX")"
+          trap 'rm -f -- "$expected_manifest"' EXIT
+          {
+            printf 'schema=shellx-drive.binary-handoff/v1\n'
+            printf 'source_revision=%s\n' "$GITHUB_SHA"
+            printf 'binary_filename=shellx-drive\n'
+            printf 'binary_sha256=%s\n' "$binary_sha256"
+          } >"$expected_manifest"
+          cmp -s "$expected_manifest" "$manifest"
+
+      - name: Package release candidate
+        id: package
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/shellx-drive-candidate"
+          binary_sha256="$(sha256sum "$RUNNER_TEMP/shellx-drive-linux-build/shellx-drive" | awk '{print $1}')"
+          ./scripts/package_binary.sh \
+            --binary "$RUNNER_TEMP/shellx-drive-linux-build/shellx-drive" \
+            --sha256 "$binary_sha256" \
+            --source-revision "$GITHUB_SHA" \
+            --out-dir "$RUNNER_TEMP/shellx-drive-candidate"
+          mapfile -t archives < <(find "$RUNNER_TEMP/shellx-drive-candidate" -maxdepth 1 -type f -name '*.tar.gz' -print)
+          test "${#archives[@]}" -eq 1
+          printf 'archive=%s\n' "${archives[0]}" >>"$GITHUB_OUTPUT"
+
+      - name: Install pinned Syft and Grype
+        run: |
+          install_anchore_tool() {
+            local tool="$1"
+            local version="$2"
+            local checksum="$3"
+            local archive="$RUNNER_TEMP/${tool}_${version#v}_linux_amd64.tar.gz"
+
+            curl --fail --location --proto '=https' --retry 3 --show-error --silent \
+              "https://github.com/anchore/${tool}/releases/download/${version}/${tool}_${version#v}_linux_amd64.tar.gz" \
+              --output "$archive"
+            printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --status
+            tar --extract --file "$archive" --gzip --directory "$RUNNER_TEMP/bin" "$tool"
+          }
+
+          mkdir --parents "$RUNNER_TEMP/bin"
+          install_anchore_tool syft v1.45.1 20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716
+          install_anchore_tool grype v0.117.0 38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26
+          "$RUNNER_TEMP/bin/syft" version
+          "$RUNNER_TEMP/bin/grype" version
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Generate and scan exact-source release SBOM
+        run: |
+          scripts/sbom.sh --out "$RUNNER_TEMP/shellx-drive-sbom"
+          sbom_dir="$RUNNER_TEMP/shellx-drive-sbom"
+          test -d "$sbom_dir" && test ! -L "$sbom_dir"
+          test -z "$(find "$sbom_dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
+          test "$(find "$sbom_dir" -mindepth 1 -maxdepth 1 -type f -printf . | wc -c)" -eq 4
+          (cd "$sbom_dir" && sha256sum --check --strict SHA256SUMS)
+          test "$(jq -r .source_commit "$sbom_dir/source-provenance.json")" = "$GITHUB_SHA"
+
+      - name: Attest package, checksum, and exact-source SBOM receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+            ${{ runner.temp }}/shellx-drive-sbom/shellx-drive.cdx.json
+            ${{ runner.temp }}/shellx-drive-sbom/source-inputs.sha256
+            ${{ runner.temp }}/shellx-drive-sbom/source-provenance.json
+            ${{ runner.temp }}/shellx-drive-sbom/SHA256SUMS
+
+      - name: Retain attested candidate for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shellx-drive-linux-server-${{ github.sha }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+            ${{ runner.temp }}/shellx-drive-sbom/shellx-drive.cdx.json
+            ${{ runner.temp }}/shellx-drive-sbom/source-inputs.sha256
+            ${{ runner.temp }}/shellx-drive-sbom/source-provenance.json
+            ${{ runner.temp }}/shellx-drive-sbom/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

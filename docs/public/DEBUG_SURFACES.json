@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "source_inventory": {
+    "roots": ["src/server.rs", "src/routes"],
+    "registration_pattern": ".route(<literal path>, ...)",
+    "expected_unique_paths": 326
+  },
+  "classes": ["product", "admin", "debug", "agent", "exclusion"],
+  "surfaces": [
+    {
+      "id": "ui-delivery",
+      "description": "HTML shells, static browser assets, the service worker, and icons.",
+      "oracle": {
+        "kind": "exclusion",
+        "reason": "These delivery routes do not mutate or expose Drive domain state; browser, CSP, asset, and UI contract tests are their owning evidence."
+      }
+    },
+    {
+      "id": "authentication",
+      "description": "Bootstrap, sign-in, sessions, local credentials, 2FA, OIDC, and app-token administration.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/auth",
+          "/debug/auth-attempts",
+          "/debug/registration",
+          "/debug/sessions",
+          "/debug/app-tokens"
+        ]
+      }
+    },
+    {
+      "id": "workspace-administration",
+      "description": "Workspace lifecycle, membership, ownership, and server-wide workspace administration.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/workspaces",
+          "/debug/receipts",
+          "/debug/activity"
+        ]
+      }
+    },
+    {
+      "id": "files",
+      "description": "File and folder lifecycle, metadata, revisions, browsing trees, previews, and content operations.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/file-tree",
+          "/debug/previews/{file_id}",
+          "/debug/downloads",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "browse-search",
+      "description": "Root views, recent/shared/starred listings, activity, and full-text search.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/browse",
+          "/debug/search",
+          "/debug/activity"
+        ]
+      }
+    },
+    {
+      "id": "sharing",
+      "description": "Managed and public guest shares, expiry, download policy, and share-derived capabilities.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/shares",
+          "/debug/downloads",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "human-sharing",
+      "description": "Item-scoped human grants, principal discovery, shared-root projections, canonical ownership inventory, and the server-controlled Everyone grant policy.",
+      "oracle": {
+        "kind": "indirect",
+        "targets": [
+          "/debug/receipts",
+          "/debug/file-tree",
+          "/debug/sync",
+          "/debug/workspaces"
+        ],
+        "reason": "Human grants deliberately stay on authenticated product and administrator routes. The generic debug views expose redacted lifecycle, canonical-tree, sync, and workspace evidence without adding a raw per-principal debug or agent control surface."
+      }
+    },
+    {
+      "id": "drops",
+      "description": "Managed Drops and public upload sessions.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/drops",
+          "/debug/uploads",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "transfers",
+      "description": "Upload, download, import, export, and archive transfer lifecycle.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/uploads",
+          "/debug/downloads",
+          "/debug/imports",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "sync",
+      "description": "Desktop, mobile, delta, conflict, and offline sync state.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/sync",
+          "/debug/sync/changes",
+          "/debug/sync/conflicts",
+          "/debug/delta-sync",
+          "/debug/mobile-sync"
+        ]
+      }
+    },
+    {
+      "id": "webdav",
+      "description": "WebDAV file operations and lock state.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/webdav",
+          "/debug/file-tree",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "office",
+      "description": "Office handoff, package, edit-session, and save lifecycle.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/office-sessions",
+          "/debug/file-tree",
+          "/debug/receipts"
+        ]
+      }
+    },
+    {
+      "id": "collaboration",
+      "description": "Comments, replies, notifications, invitations, groups, and folder templates.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/comments",
+          "/debug/notifications",
+          "/debug/invitations",
+          "/debug/groups",
+          "/debug/folder-templates"
+        ]
+      }
+    },
+    {
+      "id": "workspace-policy",
+      "description": "Quota, retention, sharing defaults, and workspace usage policy.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/policies",
+          "/debug/usage",
+          "/debug/retention/preview"
+        ]
+      }
+    },
+    {
+      "id": "hosted",
+      "description": "Hosted and tenant posture.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/hosted",
+          "/debug/registration"
+        ]
+      }
+    },
+    {
+      "id": "google-compatibility",
+      "description": "Google Drive-compatible file operations.",
+      "oracle": {
+        "kind": "indirect",
+        "targets": [
+          "/debug/receipts",
+          "/debug/file-tree",
+          "/debug/downloads"
+        ],
+        "reason": "Compatibility calls use the same file, content, receipt, and access-counter paths as native Drive operations. Separate protocol counters would duplicate state without adding an independent product oracle."
+      }
+    },
+    {
+      "id": "agent-access",
+      "description": "Human-managed agent principals and grants plus the bounded agent-safe data plane.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/agent-access",
+          "/debug/receipts",
+          "/debug/file-tree"
+        ]
+      }
+    },
+    {
+      "id": "desktop-agent-control",
+      "description": "Owner-directed desktop device enrollment and bounded command broker protocol.",
+      "oracle": {
+        "kind": "indirect",
+        "targets": [
+          "/debug/receipts",
+          "/debug/auth",
+          "/debug/sessions"
+        ],
+        "reason": "Device credentials, leases, command payloads, and device state stay on the owner/device protocol. Redacted receipt and account-session views prove lifecycle and revocation without adding a second agent-control or credential-viewing debug surface."
+      }
+    },
+    {
+      "id": "file-access-statistics",
+      "description": "Workspace preview and download counters.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/file-access",
+          "/workspaces/{workspace_id}/file-statistics"
+        ],
+        "reason": "The debug route supplies redacted server-wide evidence; the manage-permission product route remains the detailed workspace oracle."
+      }
+    },
+    {
+      "id": "service-operations",
+      "description": "Health, readiness, version, update, backup, maintenance, sandbox, support, and other server operations.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/state",
+          "/debug/maintenance",
+          "/debug/backups",
+          "/debug/support-bundle",
+          "/debug/storage-integrity"
+        ]
+      }
+    },
+    {
+      "id": "debug-observability",
+      "description": "Admin-only debug, deterministic E2E, and service-twin evidence.",
+      "oracle": {
+        "kind": "direct",
+        "targets": [
+          "/debug/state"
+        ],
+        "reason": "Each debug route overrides this surface default with itself as the direct oracle."
+      }
+    }
+  ],
+  "routes": [
+    {"path":"/","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/activity","class":"product","surface":"browse-search"},
+    {"path":"/admin/app-tokens","class":"admin","surface":"authentication"},
+    {"path":"/admin/app-tokens/{token_id}/revoke","class":"admin","surface":"authentication"},
+    {"path":"/admin/auth/attempts","class":"admin","surface":"authentication"},
+    {"path":"/admin/auth/attempts/unlock","class":"admin","surface":"authentication"},
+    {"path":"/admin/auth/users","class":"admin","surface":"authentication"},
+    {"path":"/admin/auth/users/{email}","class":"admin","surface":"authentication"},
+    {"path":"/admin/auth/users/{email}/password-reset-link","class":"admin","surface":"authentication"},
+    {"path":"/admin/backup-jobs/{job_id}","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backup-policy","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backups","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backups/{backup_id}","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backups/{backup_id}/download","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backups/{backup_id}/restore","class":"admin","surface":"service-operations"},
+    {"path":"/admin/backups/{backup_id}/validate","class":"admin","surface":"service-operations"},
+    {"path":"/admin/canonical-content","class":"admin","surface":"human-sharing"},
+    {"path":"/admin/canonical-content/{file_id}/share-details","class":"admin","surface":"human-sharing"},
+    {"path":"/admin/email","class":"admin","surface":"service-operations"},
+    {"path":"/admin/hosted/tenants","class":"admin","surface":"service-operations"},
+    {"path":"/admin/human-sharing-policy","class":"admin","surface":"human-sharing"},
+    {"path":"/admin/maintenance","class":"admin","surface":"service-operations"},
+    {"path":"/admin/maintenance/blobs/gc","class":"admin","surface":"service-operations"},
+    {"path":"/admin/registration-policy","class":"admin","surface":"service-operations"},
+    {"path":"/admin/retention/apply","class":"admin","surface":"service-operations"},
+    {"path":"/admin/retention/preview","class":"admin","surface":"service-operations"},
+    {"path":"/admin/sandbox","class":"admin","surface":"service-operations"},
+    {"path":"/admin/sandbox/apply-intent","class":"admin","surface":"service-operations"},
+    {"path":"/admin/sandbox/preview","class":"admin","surface":"service-operations"},
+    {"path":"/admin/security-events","class":"admin","surface":"authentication"},
+    {"path":"/admin/sessions","class":"admin","surface":"authentication"},
+    {"path":"/admin/sessions/{session_id}/revoke","class":"admin","surface":"authentication"},
+    {"path":"/admin/summary","class":"admin","surface":"service-operations"},
+    {"path":"/admin/support-bundle","class":"admin","surface":"service-operations"},
+    {"path":"/admin/uploads/cleanup","class":"admin","surface":"service-operations"},
+    {"path":"/admin/workspaces","class":"admin","surface":"workspace-administration"},
+    {"path":"/admin/workspaces/{workspace_id}","class":"admin","surface":"workspace-administration"},
+    {"path":"/agent-access/{grant_id}/revoke","class":"product","surface":"agent-access"},
+    {"path":"/agent-access/{grant_id}/rotate","class":"product","surface":"agent-access"},
+    {"path":"/agent-delegations","class":"product","surface":"agent-access"},
+    {"path":"/agent-delegations/{principal_id}/revoke","class":"product","surface":"agent-access"},
+    {"path":"/agent-delegations/{principal_id}/rotate","class":"product","surface":"agent-access"},
+    {"path":"/desktop-agent/devices","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/devices/register","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/cancel","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/devices/{device_id}/claim","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/devices/{device_id}/heartbeat","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/devices/{device_id}/retire","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/devices/{device_id}/revoke","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/acknowledge","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/progress","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/terminal","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/disconnect-retire","class":"product","surface":"desktop-agent-control"},
+    {"path":"/desktop-agent/commands/{command_id}/disconnect-complete","class":"product","surface":"desktop-agent-control"},
+    {"path":"/agent-principals","class":"product","surface":"agent-access"},
+    {"path":"/agent-principals/{principal_id}","class":"product","surface":"agent-access"},
+    {"path":"/agent-principals/{principal_id}/grants","class":"product","surface":"agent-access"},
+    {"path":"/agent-principals/{principal_id}/rotate","class":"product","surface":"agent-access"},
+    {"path":"/agent/v1/access","class":"agent","surface":"agent-access"},
+    {"path":"/agent/v1/grants/{grant_id}/files","class":"agent","surface":"agent-access"},
+    {"path":"/agent/v1/grants/{grant_id}/files/{file_id}","class":"agent","surface":"agent-access"},
+    {"path":"/agent/v1/grants/{grant_id}/files/{file_id}/content","class":"agent","surface":"agent-access"},
+    {"path":"/agent/v1/grants/{grant_id}/tree","class":"agent","surface":"agent-access"},
+    {"path":"/assets/drive-file-moves.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/admin-backups.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/admin-clarity.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/admin-password-reset.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/admin-security.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/download-tickets.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-account-state.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-account.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-agent-access.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-agent-delegations.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-api.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-auth-hydration.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-auth-lifecycle.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-browser.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-collaboration.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-debug.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-everyone-grant-policy.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-file-types.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-format.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-guest-links.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing-admin.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing-browser.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing-contract.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing-drawer.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing-pages.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-human-sharing.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-invitation-link.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-mobile-sync.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-preview.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-settings.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-sessions.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-uploads.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-version.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-workspace-invitations.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive-workspace-policy.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive.css","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/drive.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-drop.css","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-drop-access.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-drop.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-invitation.css","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-invitation.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-password-reset.css","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-password-reset.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-share-access.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-share-preview.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-share.css","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/public-share.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/shellx-drive-icon.svg","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/assets/upload-progress.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/auth/2fa/disable","class":"product","surface":"authentication"},
+    {"path":"/auth/2fa/enable","class":"product","surface":"authentication"},
+    {"path":"/auth/2fa/setup","class":"product","surface":"authentication"},
+    {"path":"/auth/bootstrap","class":"product","surface":"authentication"},
+    {"path":"/auth/bootstrap/status","class":"product","surface":"authentication"},
+    {"path":"/auth/bootstrap/wizard","class":"product","surface":"authentication"},
+    {"path":"/auth/login","class":"product","surface":"authentication"},
+    {"path":"/auth/logout","class":"product","surface":"authentication"},
+    {"path":"/auth/me","class":"product","surface":"authentication"},
+    {"path":"/auth/oidc/config","class":"product","surface":"authentication"},
+    {"path":"/auth/oidc/exchange","class":"product","surface":"authentication"},
+    {"path":"/auth/password/change","class":"product","surface":"authentication"},
+    {"path":"/auth/password/reset/consume","class":"product","surface":"authentication"},
+    {"path":"/auth/password/reset/request","class":"product","surface":"authentication"},
+    {"path":"/auth/recovery-codes/rotate","class":"product","surface":"authentication"},
+    {"path":"/auth/register","class":"product","surface":"authentication"},
+    {"path":"/auth/registration/status","class":"product","surface":"authentication"},
+    {"path":"/auth/security-events","class":"product","surface":"authentication"},
+    {"path":"/auth/sessions","class":"product","surface":"authentication"},
+    {"path":"/auth/sessions/revoke-others","class":"product","surface":"authentication"},
+    {"path":"/auth/sessions/{session_id}/revoke","class":"product","surface":"authentication"},
+    {"path":"/browse/files","class":"product","surface":"browse-search"},
+    {"path":"/comment-replies/{reply_id}","class":"product","surface":"collaboration"},
+    {"path":"/comments/{comment_id}","class":"product","surface":"collaboration"},
+    {"path":"/comments/{comment_id}/replies","class":"product","surface":"collaboration"},
+    {"path":"/comments/{comment_id}/resolve","class":"product","surface":"collaboration"},
+    {"path":"/dav/{workspace_id}","class":"product","surface":"webdav"},
+    {"path":"/dav/{workspace_id}/{*path}","class":"product","surface":"webdav"},
+    {"path":"/debug/activity","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/activity"]}},
+    {"path":"/debug/agent-access","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/agent-access"]}},
+    {"path":"/debug/app-tokens","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/app-tokens"]}},
+    {"path":"/debug/auth","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/auth"]}},
+    {"path":"/debug/auth-attempts","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/auth-attempts"]}},
+    {"path":"/debug/backups","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/backups"]}},
+    {"path":"/debug/browse","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/browse"]}},
+    {"path":"/debug/capabilities","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/capabilities"]}},
+    {"path":"/debug/comments","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/comments"]}},
+    {"path":"/debug/delta-sync","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/delta-sync"]}},
+    {"path":"/debug/downloads","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/downloads"]}},
+    {"path":"/debug/drops","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/drops"]}},
+    {"path":"/debug/drops/{drop_id}","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/drops/{drop_id}"]}},
+    {"path":"/debug/e2e/expire-capability","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/e2e/expire-capability"]}},
+    {"path":"/debug/e2e/human-sharing/actors/{actor_id}","class":"debug","surface":"debug-observability","methods":["DELETE"],"oracle":{"kind":"direct","targets":["/debug/e2e/human-sharing/actors/{actor_id}"]}},
+    {"path":"/debug/e2e/human-sharing/cleanup","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/e2e/human-sharing/cleanup"]}},
+    {"path":"/debug/e2e/human-sharing/groups/{group_id}","class":"debug","surface":"debug-observability","methods":["DELETE"],"oracle":{"kind":"direct","targets":["/debug/e2e/human-sharing/groups/{group_id}"]}},
+    {"path":"/debug/e2e/reset","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/e2e/reset"]}},
+    {"path":"/debug/e2e/seed","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/e2e/seed"]}},
+    {"path":"/debug/email","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/email"]}},
+    {"path":"/debug/email/run","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/email/run"]}},
+    {"path":"/debug/export","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/export"]}},
+    {"path":"/debug/file-access","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/file-access"]}},
+    {"path":"/debug/file-tree","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/file-tree"]}},
+    {"path":"/debug/folder-templates","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/folder-templates"]}},
+    {"path":"/debug/groups","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/groups"]}},
+    {"path":"/debug/hosted","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/hosted"]}},
+    {"path":"/debug/imports","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/imports"]}},
+    {"path":"/debug/invitations","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/invitations"]}},
+    {"path":"/debug/jobs","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/jobs"]}},
+    {"path":"/debug/jobs/run","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/jobs/run"]}},
+    {"path":"/debug/maintenance","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/maintenance"]}},
+    {"path":"/debug/mobile-sync","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/mobile-sync"]}},
+    {"path":"/debug/notifications","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/notifications"]}},
+    {"path":"/debug/office-sessions","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/office-sessions"]}},
+    {"path":"/debug/policies","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/policies"]}},
+    {"path":"/debug/previews/{file_id}","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/previews/{file_id}"]}},
+    {"path":"/debug/receipts","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/receipts"]}},
+    {"path":"/debug/registration","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/registration"]}},
+    {"path":"/debug/retention/preview","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/retention/preview"]}},
+    {"path":"/debug/sandboxes","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/sandboxes"]}},
+    {"path":"/debug/search","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/search"]}},
+    {"path":"/debug/sessions","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/sessions"]}},
+    {"path":"/debug/shares","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/shares"]}},
+    {"path":"/debug/state","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/state"]}},
+    {"path":"/debug/storage-integrity","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/storage-integrity"]}},
+    {"path":"/debug/support-bundle","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/support-bundle"]}},
+    {"path":"/debug/sync","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/sync"]}},
+    {"path":"/debug/sync/changes","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/sync/changes"]}},
+    {"path":"/debug/sync/conflicts","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/sync/conflicts"]}},
+    {"path":"/debug/twin/run","class":"debug","surface":"debug-observability","methods":["POST"],"oracle":{"kind":"direct","targets":["/debug/twin/run"]}},
+    {"path":"/debug/twin/scenarios","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/twin/scenarios"]}},
+    {"path":"/debug/uploads","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/uploads"]}},
+    {"path":"/debug/usage","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/usage"]}},
+    {"path":"/debug/webdav","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/webdav"]}},
+    {"path":"/debug/workspaces","class":"debug","surface":"debug-observability","methods":["GET"],"oracle":{"kind":"direct","targets":["/debug/workspaces"]}},
+    {"path":"/downloads/files/{ticket}","class":"product","surface":"transfers"},
+    {"path":"/downloads/{ticket}","class":"product","surface":"transfers"},
+    {"path":"/drive/v3/files","class":"product","surface":"google-compatibility"},
+    {"path":"/drive/v3/files/{file_id}","class":"product","surface":"google-compatibility"},
+    {"path":"/drops","class":"product","surface":"drops"},
+    {"path":"/drops/{drop_id}","class":"product","surface":"drops"},
+    {"path":"/drops/{drop_id}/revoke","class":"product","surface":"drops"},
+    {"path":"/favicon.ico","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/files","class":"product","surface":"files"},
+    {"path":"/files/bulk","class":"product","surface":"files"},
+    {"path":"/files/download-zip","class":"product","surface":"files"},
+    {"path":"/files/{file_id}","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/action-capabilities","class":"product","surface":"human-sharing"},
+    {"path":"/files/{file_id}/agent-access","class":"product","surface":"agent-access"},
+    {"path":"/files/{file_id}/comments","class":"product","surface":"collaboration"},
+    {"path":"/files/{file_id}/content","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/copy","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/cover","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/download","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/download-zip","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/human-grants","class":"product","surface":"human-sharing"},
+    {"path":"/files/{file_id}/metadata","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/preview","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/restore","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/prune","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/{revision}","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/{revision}/download","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/{revision}/pin","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/{revision}/restore","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/revisions/{revision}/unpin","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/shares","class":"product","surface":"sharing"},
+    {"path":"/files/{file_id}/star","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/thumbnail","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/trash","class":"product","surface":"files"},
+    {"path":"/files/{file_id}/unstar","class":"product","surface":"files"},
+    {"path":"/groups","class":"product","surface":"collaboration"},
+    {"path":"/groups/{group_id}/members","class":"product","surface":"collaboration"},
+    {"path":"/health","class":"product","surface":"service-operations"},
+    {"path":"/hosted/signup","class":"product","surface":"hosted"},
+    {"path":"/hosted/status","class":"product","surface":"hosted"},
+    {"path":"/human-grants/{grant_id}","class":"product","surface":"human-sharing"},
+    {"path":"/manifest.webmanifest","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/notifications","class":"product","surface":"collaboration"},
+    {"path":"/notifications/read-all","class":"product","surface":"collaboration"},
+    {"path":"/notifications/{notification_id}/read","class":"product","surface":"collaboration"},
+    {"path":"/office/files/{file_id}/open","class":"product","surface":"office"},
+    {"path":"/office/files/{file_id}/save","class":"product","surface":"office"},
+    {"path":"/office/launch/{handoff}","class":"product","surface":"office"},
+    {"path":"/office/sessions/{token}","class":"product","surface":"office"},
+    {"path":"/office/sessions/{token}/package","class":"product","surface":"office"},
+    {"path":"/office/sessions/{token}/save","class":"product","surface":"office"},
+    {"path":"/office/status","class":"product","surface":"office"},
+    {"path":"/pub/drops/{drop_id}","class":"product","surface":"drops"},
+    {"path":"/pub/drops/{drop_id}/preflight","class":"product","surface":"drops"},
+    {"path":"/pub/drops/{drop_id}/uploads","class":"product","surface":"drops"},
+    {"path":"/pub/drops/{drop_id}/uploads/{session_id}","class":"product","surface":"drops"},
+    {"path":"/pub/drops/{drop_id}/uploads/{session_id}/cancel","class":"product","surface":"drops"},
+    {"path":"/pub/invitations/accept","class":"product","surface":"collaboration"},
+    {"path":"/pub/shares/{share_id}","class":"product","surface":"sharing"},
+    {"path":"/pub/shares/{share_id}/content","class":"product","surface":"sharing"},
+    {"path":"/pub/shares/{share_id}/download","class":"product","surface":"sharing"},
+    {"path":"/pub/shares/{share_id}/download-zip","class":"product","surface":"sharing"},
+    {"path":"/pub/shares/{share_id}/preview","class":"product","surface":"sharing"},
+    {"path":"/pub/shares/{share_id}/thumbnail","class":"product","surface":"sharing"},
+    {"path":"/ready","class":"product","surface":"service-operations"},
+    {"path":"/recent","class":"product","surface":"browse-search"},
+    {"path":"/reset-password","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/search","class":"product","surface":"browse-search"},
+    {"path":"/share-principals","class":"product","surface":"human-sharing"},
+    {"path":"/shared","class":"product","surface":"browse-search"},
+    {"path":"/shares","class":"product","surface":"sharing"},
+    {"path":"/shares/{share_id}","class":"product","surface":"sharing"},
+    {"path":"/shares/{share_id}/revoke","class":"product","surface":"sharing"},
+    {"path":"/sharing/shared-by-me","class":"product","surface":"human-sharing"},
+    {"path":"/sharing/shared-with-me","class":"product","surface":"human-sharing"},
+    {"path":"/starred","class":"product","surface":"browse-search"},
+    {"path":"/sw.js","class":"exclusion","surface":"ui-delivery"},
+    {"path":"/sync/changes","class":"product","surface":"sync"},
+    {"path":"/sync/conflicts","class":"product","surface":"sync"},
+    {"path":"/sync/files/{file_id}/chunks","class":"product","surface":"sync"},
+    {"path":"/sync/files/{file_id}/delta","class":"product","surface":"sync"},
+    {"path":"/sync/health","class":"product","surface":"sync"},
+    {"path":"/sync/mobile/files/{file_id}/content","class":"product","surface":"sync"},
+    {"path":"/sync/mobile/offline","class":"product","surface":"sync"},
+    {"path":"/sync/mobile/workspaces","class":"product","surface":"sync"},
+    {"path":"/sync/mobile/workspaces/{workspace_id}/manifest","class":"product","surface":"sync"},
+    {"path":"/sync/roots","class":"product","surface":"sync"},
+    {"path":"/sync/roots/page","class":"product","surface":"sync"},
+    {"path":"/sync/roots/revalidate","class":"product","surface":"sync"},
+    {"path":"/sync/roots/{root_id}/manifest","class":"product","surface":"sync"},
+    {"path":"/sync/workspaces","class":"product","surface":"sync"},
+    {"path":"/sync/workspaces/{workspace_id}/changes","class":"product","surface":"sync"},
+    {"path":"/sync/workspaces/{workspace_id}/manifest","class":"product","surface":"sync"},
+    {"path":"/update/check","class":"product","surface":"service-operations"},
+    {"path":"/uploads/preflight","class":"product","surface":"transfers"},
+    {"path":"/uploads/resumable","class":"product","surface":"transfers"},
+    {"path":"/uploads/resumable/{upload_id}","class":"product","surface":"transfers"},
+    {"path":"/uploads/resumable/{upload_id}/cancel","class":"product","surface":"transfers"},
+    {"path":"/uploads/resumable/{upload_id}/content","class":"product","surface":"transfers"},
+    {"path":"/version","class":"product","surface":"service-operations"},
+    {"path":"/workspaces","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/archive","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/drops","class":"product","surface":"drops"},
+    {"path":"/workspaces/{workspace_id}/export/rclone","class":"product","surface":"transfers"},
+    {"path":"/workspaces/{workspace_id}/file-statistics","class":"product","surface":"file-access-statistics"},
+    {"path":"/workspaces/{workspace_id}/folder-templates","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/folder-templates/{template_id}","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/folder-templates/{template_id}/apply","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/group-grants","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/group-grants/{group_id}","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/import/rclone","class":"product","surface":"transfers"},
+    {"path":"/workspaces/{workspace_id}/import/rclone/preview","class":"product","surface":"transfers"},
+    {"path":"/workspaces/{workspace_id}/invitations","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/invitations/{invitation_id}/cancel","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/invitations/{invitation_id}/resend","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/leave","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/members","class":"product","surface":"collaboration"},
+    {"path":"/workspaces/{workspace_id}/policy","class":"product","surface":"workspace-policy"},
+    {"path":"/workspaces/{workspace_id}/shares","class":"product","surface":"sharing"},
+    {"path":"/workspaces/{workspace_id}/transfer-owner","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/trash/empty","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/tree","class":"product","surface":"files"},
+    {"path":"/workspaces/{workspace_id}/unarchive","class":"product","surface":"workspace-administration"},
+    {"path":"/workspaces/{workspace_id}/uploads","class":"product","surface":"transfers"},
+    {"path":"/workspaces/{workspace_id}/usage","class":"product","surface":"workspace-policy"}
+  ]
+}

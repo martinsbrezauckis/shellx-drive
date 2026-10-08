@@ -1,0 +1,12 @@
+{
+  "name": "shellx-drive-desktop-build",
+  "version": "0.1.13",
+  "private": true,
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  }
+}

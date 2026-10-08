@@ -1,0 +1,17 @@
+{
+  "name": "ShellX Drive",
+  "short_name": "Drive",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fa",
+  "theme_color": "#b4dc19",
+  "icons": [
+    {
+      "src": "/assets/shellx-drive-icon.svg?v=2026-07-03-icon",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

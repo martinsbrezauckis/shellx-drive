@@ -1,0 +1,86 @@
+# Third-party notices
+
+## Inter desktop typeface
+
+The desktop application bundles the unmodified upright Inter variable font
+from Inter release 4.1. Copyright (c) 2016 The Inter Project Authors.
+
+- Official project: <https://rsms.me/inter/>
+- License: SIL Open Font License 1.1
+- The complete copyright and license terms ship in `desktop/ui/fonts/OFL.txt`.
+- `desktop/ui/fonts/README.md` records the source and font-file digest.
+
+The font is loaded from the application's bundled UI assets and does not
+require an installed typeface or a network font service.
+
+## gtk-rs glib crate 0.18.5 compatibility backport
+
+The desktop workspace retains the MIT-licensed `glib` 0.18.5 source at
+`desktop/vendor/glib-0.18.5-rustsec-2024-0429` to apply the upstream correction
+for RUSTSEC-2024-0429 without replacing the GTK3 dependency graph.
+The retained source also corrects safe-API memory invariants in inline
+boxed slices, StrV termination, foreign GString byte lengths and LogField value
+lifetimes, linked-list retention and borrowed container copying. Additional local
+corrections cover thread-affine destruction and results, empty-container
+conversion, single-view Unicode extents, URI pointer ranges, extension unwind,
+retained Variant owners, and rejected parameter or Variant construction inputs.
+Their provenance and native-test boundary are recorded in BACKPORT.md.
+
+- Upstream project: <https://github.com/gtk-rs/gtk-rs-core>
+- Upstream correction: <https://github.com/gtk-rs/gtk-rs-core/pull/1343>
+- Registry archive SHA-256: `233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5`
+- Copyrights are retained by the gtk-rs contributors, as stated in the retained
+  `COPYRIGHT` file. The complete MIT permission and warranty terms remain in
+  the retained `LICENSE` file.
+- `BACKPORT.md` records the source change and qualification boundary. The
+  version remains 0.18.5; source verification remains separate from scanner
+  matching and release qualification.
+
+The retained `SHA256SUMS` inventories every upstream file and `BACKPORT.md`.
+Run `python3 scripts/verify_glib_backport.py` to validate the retained file set,
+source digests, correction and Cargo resolution. This source check reports the
+known advisory explicitly; it does not run or waive vulnerability scanning.
+
+## Project Nayuki qrcodegen crate 1.8.0
+
+ShellX Drive uses the Project Nayuki `qrcodegen` Rust crate to generate the
+two-factor-authentication setup QR module matrix on the server. No vendored
+browser QR encoder ships with this source tree.
+
+- Project URL: <https://www.nayuki.io/page/qr-code-generator-library>
+- crates.io package: `qrcodegen` version `1.8.0`
+- Cargo.lock source: `registry+https://github.com/rust-lang/crates.io-index`
+- Cargo.lock package checksum: `4339fc7a1021c9c1621d87f5e3505f2805c8c105420ba2f2a4df86814590c142`
+- License: MIT
+
+### Registry/Cargo.lock reproducibility
+
+`Cargo.toml` allows compatible updates from `qrcodegen = "1.8"`. Cargo resolves
+that package through the crates.io registry, and `Cargo.lock` records the exact
+version, registry source and package checksum above. `cargo build --locked`
+refuses a changed resolution, while Cargo verifies the downloaded package
+against the locked checksum. This NOTICE is included in Cargo package inputs
+and in the server binary support archive; run the focused public-documentation
+and packaging tests after changing this dependency or notice.
+
+### MIT License
+
+Copyright (c) Project Nayuki. (MIT License)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

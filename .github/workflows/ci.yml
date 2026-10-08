@@ -1,0 +1,221 @@
+name: ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: stable
+
+jobs:
+  server:
+    name: Server build and lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install current stable Rust toolchain
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUSTUP_TOOLCHAIN"
+          rustc --version
+          cargo --version
+
+      - name: Format
+        id: format
+        continue-on-error: true
+        run: cargo fmt --check
+
+      - name: Check server library and binaries
+        id: check
+        continue-on-error: true
+        run: cargo check --locked --lib --bins
+
+      - name: Lint server library and binaries
+        id: clippy
+        continue-on-error: true
+        run: cargo clippy --locked --lib --bins -- -D warnings
+
+      - name: Build server release binary
+        id: build
+        continue-on-error: true
+        run: cargo build --locked --release --bin shellx-drive
+
+      - name: Report every server check failure
+        if: ${{ always() }}
+        env:
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          CLIPPY_OUTCOME: ${{ steps.clippy.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          status=0
+          for result in "$FORMAT_OUTCOME" "$CHECK_OUTCOME" "$CLIPPY_OUTCOME" "$BUILD_OUTCOME"; do
+            [[ "$result" == "success" ]] || status=1
+          done
+          exit "$status"
+
+  desktop-mirror-core:
+    name: Desktop mirror-core build and lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install GLib development dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends pkg-config libglib2.0-dev
+          pkg-config --modversion glib-2.0
+
+      - name: Install current stable Rust toolchain
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUSTUP_TOOLCHAIN"
+          rustc --version
+          cargo --version
+
+      - name: Format mirror-core workspace member
+        id: format
+        continue-on-error: true
+        run: cargo fmt --manifest-path desktop/Cargo.toml -p shellx-drive-desktop-core -- --check
+
+      - name: Check mirror-core library
+        id: check
+        continue-on-error: true
+        run: cargo check --locked --manifest-path desktop/Cargo.toml -p shellx-drive-desktop-core --lib
+
+      - name: Lint mirror-core workspace member
+        id: clippy
+        continue-on-error: true
+        run: cargo clippy --locked --manifest-path desktop/Cargo.toml -p shellx-drive-desktop-core --lib --no-deps -- -D warnings
+
+      - name: Verify retained GLib backport source
+        id: glib_source
+        continue-on-error: true
+        run: python3 scripts/verify_glib_backport.py
+
+      - name: Verify retained macOS updater backport source
+        id: updater_backport_source
+        continue-on-error: true
+        run: python3 scripts/verify_tauri_updater_macos_backport.py
+
+      - name: Report every desktop mirror-core failure
+        if: ${{ always() }}
+        env:
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          CLIPPY_OUTCOME: ${{ steps.clippy.outcome }}
+          GLIB_SOURCE_OUTCOME: ${{ steps.glib_source.outcome }}
+          UPDATER_BACKPORT_SOURCE_OUTCOME: ${{ steps.updater_backport_source.outcome }}
+        run: |
+          status=0
+          for result in "$FORMAT_OUTCOME" "$CHECK_OUTCOME" "$CLIPPY_OUTCOME" "$GLIB_SOURCE_OUTCOME" "$UPDATER_BACKPORT_SOURCE_OUTCOME"; do
+            [[ "$result" == "success" ]] || status=1
+          done
+          exit "$status"
+
+  dependency-audit:
+    name: Desktop build dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install supported Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 'node'
+
+      - name: Install locked desktop dependencies without lifecycle scripts
+        run: |
+          npm install --global --ignore-scripts pnpm@latest
+          (cd desktop && pnpm --version)
+          (cd desktop && pnpm install --frozen-lockfile --ignore-scripts)
+
+      - name: Audit locked JavaScript dependencies
+        run: |
+          (cd desktop && pnpm audit --audit-level high)
+
+  rustsec-audit:
+    name: RustSec advisory and yank audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install current stable Rust toolchain
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          rustup default "$RUSTUP_TOOLCHAIN"
+
+      - name: Install current cargo-audit
+        run: |
+          cargo install cargo-audit --locked --root "$RUNNER_TEMP/cargo-audit"
+          "$RUNNER_TEMP/cargo-audit/bin/cargo-audit" --version
+
+      - name: Audit locked server Rust dependencies
+        id: server_rust_audit
+        continue-on-error: true
+        env:
+          CARGO_AUDIT_BIN: ${{ runner.temp }}/cargo-audit/bin/cargo-audit
+        run: ./scripts/cargo_audit_resilient.sh Cargo.lock
+
+      - name: Audit locked desktop Rust dependencies
+        id: desktop_rust_audit
+        continue-on-error: true
+        env:
+          CARGO_AUDIT_BIN: ${{ runner.temp }}/cargo-audit/bin/cargo-audit
+        run: ./scripts/cargo_audit_resilient.sh desktop/Cargo.lock
+
+      - name: Report every RustSec failure
+        if: ${{ always() }}
+        env:
+          SERVER_RUST_AUDIT_OUTCOME: ${{ steps.server_rust_audit.outcome }}
+          DESKTOP_RUST_AUDIT_OUTCOME: ${{ steps.desktop_rust_audit.outcome }}
+        run: test "$SERVER_RUST_AUDIT_OUTCOME" = success && test "$DESKTOP_RUST_AUDIT_OUTCOME" = success
+
+  sbom:
+    name: Generate and scan dependency SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pinned Syft and Grype
+        run: |
+          install_anchore_tool() {
+            local tool="$1"
+            local version="$2"
+            local checksum="$3"
+            local archive="$RUNNER_TEMP/${tool}_${version#v}_linux_amd64.tar.gz"
+
+            curl --fail --location --proto '=https' --retry 3 --show-error --silent \
+              "https://github.com/anchore/${tool}/releases/download/${version}/${tool}_${version#v}_linux_amd64.tar.gz" \
+              --output "$archive"
+            printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check --status
+            tar --extract --file "$archive" --gzip --directory "$RUNNER_TEMP/bin" "$tool"
+          }
+
+          mkdir --parents "$RUNNER_TEMP/bin"
+          install_anchore_tool syft v1.45.1 20c84195e24927f50a3b2269946be51f4c4abc9d2f145fee7388b4199149f716
+          install_anchore_tool grype v0.117.0 38525dab1e06f162ebaa02f94d82d1f807076b011a44180cf2777edf1a7b9c26
+          "$RUNNER_TEMP/bin/syft" version
+          "$RUNNER_TEMP/bin/grype" version
+          printf '%s\n' "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Generate and scan source SBOM
+        run: scripts/sbom.sh --out "$RUNNER_TEMP/sbom"

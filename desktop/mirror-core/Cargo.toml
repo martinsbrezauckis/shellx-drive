@@ -1,0 +1,29 @@
+[package]
+name = "shellx-drive-desktop-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Platform-neutral, safety-first mirror core for ShellX Drive Desktop"
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+directories.workspace = true
+keyring.workspace = true
+libc.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+url.workspace = true
+walkdir.workspace = true
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+glib = "=0.18.5"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Storage_FileSystem", "Win32_System_Threading"] }

@@ -1,0 +1,67 @@
+.drive-manual .manual-topnav [aria-current="page"] { color: var(--accent-hot); }
+.drive-skip { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 12px 16px; background: var(--bg-1); border: 1px solid var(--accent); transform: translateY(-160%); }
+.drive-skip:focus { transform: translateY(0); }
+.drive-manual a:focus-visible, .drive-manual button:focus-visible, .drive-manual summary:focus-visible { outline: 2px solid var(--accent-hot); outline-offset: 3px; }
+.drive-manual .manual-section a, .drive-manual .manual-note a, .drive-manual figcaption a { color: var(--ink-0); text-decoration: underline; text-decoration-color: var(--accent-dim); text-underline-offset: 3px; }
+.drive-manual .manual-section a:hover, .drive-manual .manual-note a:hover { text-decoration-color: var(--accent-hot); }
+.drive-manual .manual-section .manual-button { text-decoration: none; }
+.drive-manual .manual-section { scroll-margin-top: 88px; }
+.drive-manual #manual-content { scroll-margin-top: 88px; }
+.drive-manual .manual-section > p, .drive-manual .manual-section > ol, .drive-manual .manual-section > ul { max-width: 900px; color: var(--ink-1); line-height: 1.75; }
+.drive-manual .manual-section > p { margin: 16px 0; }
+.drive-manual .manual-section h3 { margin: 28px 0 10px; font-size: 19px; letter-spacing: -0.01em; }
+.drive-manual .manual-callout h3 { margin-top: 0; font-size: 16px; }
+.drive-manual .manual-callout { max-width: 900px; margin-top: 24px; }
+.drive-manual .manual-section li { margin: 9px 0; padding-left: 4px; }
+.drive-manual strong { color: var(--ink-0); font-weight: 600; }
+.drive-manual code { color: var(--ink-0); font-family: var(--mono); font-size: 0.88em; overflow-wrap: anywhere; }
+.drive-command { max-width: 900px; margin: 20px 0; padding: 16px; overflow-x: auto; border: 1px solid var(--line-strong); background: var(--bg-1); line-height: 1.7; }
+.drive-manual .manual-api-table { margin: 24px 0; color: var(--ink-1); }
+.drive-manual .manual-api-table caption { margin-bottom: 10px; color: var(--ink-2); text-align: left; font-size: 13px; }
+.drive-manual .manual-api-table th:first-child { width: 26%; }
+.drive-manual .drive-formats th:first-child { width: 20%; }
+.drive-manual .drive-formats th:nth-child(2) { width: 48%; }
+.drive-manual .drive-related { font-size: 14px; }
+.drive-figure { margin: 0; }
+.drive-figure--desktop { max-width: 720px; }
+.drive-manual .manual-section .drive-figure { margin-top: 28px; }
+.drive-figure figcaption { margin: 12px 0 28px; color: var(--ink-2); font-size: 13px; }
+.drive-search-label { display: block; margin-bottom: 7px; color: var(--ink-2); font-family: var(--mono); font-size: 11px; }
+.drive-manual .manual-search { margin-bottom: 0; }
+.drive-search-status { min-height: 18px; margin: 8px 0 12px; color: var(--ink-2); font-size: 12px; }
+.drive-nav-toggle { display: none; }
+.drive-manual .manual-node { min-height: 36px; font-size: 14px; }
+.drive-manual .manual-folder summary { min-height: 40px; }
+.drive-reference-list { display: grid; gap: 2px; }
+
+@media (max-width: 760px) {
+  .drive-manual .manual-topbar { gap: 0; }
+  .drive-manual .manual-brand { min-height: 36px; }
+  .drive-manual .manual-topnav { column-gap: 20px; }
+  .drive-manual .manual-shell { gap: 12px; }
+  .drive-manual .manual-tree { padding: 16px; }
+  .drive-manual .manual-product { margin-bottom: 12px; }
+  .drive-manual .manual-node { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+  .drive-manual .manual-folder summary { min-height: 44px; }
+  .drive-search-status:empty { display: none; }
+  .drive-nav-toggle:not([hidden]) { display: flex; justify-content: space-between; width: 100%; min-height: 44px; margin-top: 16px; margin-bottom: 0; }
+  .drive-manual[data-navigation-ready] [data-manual-navigation][data-collapsed="true"] { display: none; }
+  .drive-manual [data-manual-navigation] { margin-top: 10px; }
+  .drive-manual .manual-hero { padding-top: 20px; }
+  .drive-manual .manual-hero h1 { font-size: clamp(38px, 12vw, 58px); }
+  .drive-manual .manual-hero p { font-size: 16px; }
+  .drive-manual .manual-button { min-height: 44px; }
+  .drive-manual .manual-section { padding: 32px 0; scroll-margin-top: 110px; }
+  .drive-manual #manual-content { scroll-margin-top: 110px; }
+  .drive-manual .manual-api-table { display: table; font-size: 13px; }
+  .drive-manual .manual-api-table th, .drive-manual .manual-api-table td { padding: 9px 7px; }
+  .drive-manual .manual-api-table th { font-size: 10px; letter-spacing: 0.05em; }
+  .drive-manual .manual-api-table th:first-child { width: 30%; }
+  .drive-manual .drive-formats th:first-child { width: 30%; }
+  .drive-manual .drive-formats th:nth-child(2) { width: 40%; }
+  .drive-figure figcaption { margin-bottom: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-manual *, .drive-manual *::before, .drive-manual *::after { scroll-behavior: auto; transition: none; }
+}

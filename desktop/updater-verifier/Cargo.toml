@@ -1,0 +1,15 @@
+[package]
+name = "shellx-drive-updater-verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+minisign-verify = "0.2.5"
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,48 @@
+[Unit]
+Description=ShellX Drive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shellx-drive
+Group=shellx-drive
+# Keep operational Drive events visible even if an operator creates the env file
+# without a RUST_LOG entry. EnvironmentFile can override this default.
+Environment=RUST_LOG=shellx_drive=info
+EnvironmentFile=/etc/shellx-drive.env
+ExecStart=/usr/local/bin/shellx-drive --bind ${SHELLX_DRIVE_BIND} --data-dir ${SHELLX_DRIVE_DATA_DIR}
+Restart=on-failure
+RestartSec=5s
+MemoryHigh=512M
+MemoryMax=768M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+ProtectHostname=true
+SystemCallFilter=@system-service
+# Default-layout reference unit. The maintained installer renders this value
+# to the operator-selected /var/lib/shellx-drive or /srv/shellx-drive root.
+ReadWritePaths=/var/lib/shellx-drive
+
+[Install]
+WantedBy=multi-user.target

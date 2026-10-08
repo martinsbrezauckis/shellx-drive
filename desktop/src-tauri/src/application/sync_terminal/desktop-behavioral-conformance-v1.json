@@ -1,0 +1,131 @@
+{
+  "schema": "shellx-drive.desktop-behavioral-conformance/v1",
+  "terminal_cases": [
+    {
+      "id": "success_then_permanent_local_io_then_503",
+      "selected_workspace": "selected",
+      "steps": [
+        { "workspace_id": "selected", "outcome": "success" },
+        { "workspace_id": "local-io", "outcome": "permanent_local_io" },
+        { "workspace_id": "transport", "outcome": "http_503" }
+      ],
+      "expected_status": "error",
+      "expected_pending_reviews": 0,
+      "expected_terminal": "ok"
+    },
+    {
+      "id": "retained_nonselected_revocation_review_then_503",
+      "selected_workspace": "selected",
+      "steps": [
+        { "workspace_id": "selected", "outcome": "success" },
+        { "workspace_id": "revoked", "outcome": "retained_access_review" },
+        { "workspace_id": "transport", "outcome": "http_503" }
+      ],
+      "expected_status": "needs_review",
+      "expected_pending_reviews": 1,
+      "expected_terminal": "ok"
+    },
+    {
+      "id": "isolated_503_is_offline",
+      "selected_workspace": "selected",
+      "steps": [
+        { "workspace_id": "selected", "outcome": "http_503" }
+      ],
+      "expected_status": "offline",
+      "expected_pending_reviews": 0,
+      "expected_terminal": "http_503"
+    }
+  ],
+  "planning_cases": [
+    {
+      "id": "unbaselined_remote_name_collision_is_reviewed",
+      "baseline": {},
+      "remote": [
+        {
+          "id": "remote-new",
+          "parent_id": null,
+          "name": "report.pdf",
+          "kind": "file",
+          "revision": 1,
+          "content_hash": "remote-body",
+          "size_bytes": 11,
+          "trashed": false
+        }
+      ],
+      "local": [
+        {
+          "relative_path": "report.pdf",
+          "content_hash": "local-body",
+          "size_bytes": 10,
+          "is_directory": false
+        }
+      ],
+      "expected_action_kinds": [],
+      "expected_review_kinds": ["path_conflict"]
+    },
+    {
+      "id": "two_sided_content_conflict_keeps_a_named_copy_for_review",
+      "baseline": {
+        "file-1": {
+          "remote_id": "file-1",
+          "parent_id": null,
+          "relative_path": "report.pdf",
+          "kind": "file",
+          "content_hash": "base-body",
+          "revision": 1
+        }
+      },
+      "remote": [
+        {
+          "id": "file-1",
+          "parent_id": null,
+          "name": "report.pdf",
+          "kind": "file",
+          "revision": 2,
+          "content_hash": "remote-body",
+          "size_bytes": 11,
+          "trashed": false
+        }
+      ],
+      "local": [
+        {
+          "relative_path": "report.pdf",
+          "content_hash": "local-body",
+          "size_bytes": 10,
+          "is_directory": false
+        }
+      ],
+      "expected_action_kinds": ["write_remote_conflict_copy"],
+      "expected_review_kinds": ["content_conflict"]
+    },
+    {
+      "id": "local_deletion_offers_restore_without_automatic_mutation",
+      "baseline": {
+        "file-1": {
+          "remote_id": "file-1",
+          "parent_id": null,
+          "relative_path": "report.pdf",
+          "kind": "file",
+          "content_hash": "base-body",
+          "revision": 1
+        }
+      },
+      "remote": [
+        {
+          "id": "file-1",
+          "parent_id": null,
+          "name": "report.pdf",
+          "kind": "file",
+          "revision": 1,
+          "content_hash": "base-body",
+          "size_bytes": 9,
+          "trashed": false
+        }
+      ],
+      "local": [],
+      "expected_action_kinds": [],
+      "expected_review_kinds": ["local_deletion"],
+      "expected_first_review_actions": ["delete_from_drive", "restore_local_copy"]
+    }
+  ]
+}

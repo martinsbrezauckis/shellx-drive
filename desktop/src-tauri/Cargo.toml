@@ -1,0 +1,44 @@
+[package]
+name = "shellx-drive-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+description = "Tauri shell for ShellX Drive Desktop"
+
+[[bin]]
+name = "shellx-drive-desktop"
+path = "src/main.rs"
+required-features = ["desktop-shell"]
+
+[features]
+default = []
+desktop-shell = ["dep:tauri", "dep:tauri-plugin-dialog", "dep:tauri-plugin-notification", "dep:tauri-plugin-updater", "dep:tauri-build"]
+
+[dependencies]
+chrono.workspace = true
+directories.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+shellx-drive-desktop-core = { path = "../mirror-core" }
+tempfile.workspace = true
+tokio.workspace = true
+tauri = { version = "2.11.5", optional = true, features = ["tray-icon"] }
+tauri-plugin-dialog = { version = "2.7.2", optional = true }
+tauri-plugin-notification = { version = "2.3.3", optional = true }
+tauri-plugin-updater = { version = "2.10.1", optional = true }
+url.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows-sys = { version = "0.61", features = ["Wdk_Foundation", "Wdk_Storage_FileSystem", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true

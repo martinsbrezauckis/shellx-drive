@@ -1,0 +1,70 @@
+{
+  "registration_request": {
+    "platform": "linux",
+    "app_version": "1.0.0",
+    "pair_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "ready",
+    "pending_disconnect_cleanup": false,
+    "candidate_recovery": false
+  },
+  "claim_response": {
+    "claim": {
+      "command_id": "command_1",
+      "lease_id": "lease_1",
+      "lease_expires_at": "2036-09-07T12:00:00Z",
+      "kind": "set_paused",
+      "payload": { "paused": true }
+    }
+  },
+  "acknowledge_request": {
+    "lease_id": "lease_1",
+    "event_sequence": 1,
+    "assertion": {
+      "app_version": "1.0.0",
+      "pair_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "ready",
+      "pending_disconnect_cleanup": false,
+      "candidate_recovery": false
+    }
+  },
+  "initial_progress_request": {
+    "lease_id": "lease_1",
+    "event_sequence": 2,
+    "assertion": {
+      "app_version": "1.0.0",
+      "pair_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "ready",
+      "pending_disconnect_cleanup": false,
+      "candidate_recovery": false
+    },
+    "phase": "accepted"
+  },
+  "renewal_progress_request": {
+    "lease_id": "lease_1",
+    "event_sequence": 3,
+    "assertion": {
+      "app_version": "1.0.0",
+      "pair_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "ready",
+      "pending_disconnect_cleanup": false,
+      "candidate_recovery": false
+    },
+    "phase": "syncing"
+  },
+  "terminal_retry_request": {
+    "lease_id": "lease_1",
+    "event_sequence": 4,
+    "assertion": {
+      "app_version": "1.0.0",
+      "pair_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "ready",
+      "pending_disconnect_cleanup": false,
+      "candidate_recovery": false,
+      "last_terminal_command_id": "command_1"
+    },
+    "status": "succeeded",
+    "terminal_code": "completed",
+    "result_code": "pause_persisted",
+    "result": { "kind": "pause", "paused": true }
+  }
+}

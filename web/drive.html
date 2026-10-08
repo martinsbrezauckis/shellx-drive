@@ -1,0 +1,2116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#b4dc19" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ShellX Drive" />
+    <title>ShellX Drive</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/shellx-drive-icon.svg?v=2026-07-03-icon" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/assets/drive.css?v=2026-09-08-mobile-rail1" />
+  </head>
+  <body data-shellx-drive-app data-drive-ui-state="signed_out">
+    <!--
+      Icon sprite (from web/icons.svg; assets are
+      include_str!-embedded so the standalone .svg is not served). Referenced via
+      <svg class="icon"><use href="#i-…"/></svg>. File-type icons take their hue
+      from the container `color: var(--ft-…)`.
+    -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" class="icon-sprite" aria-hidden="true">
+      <defs>
+        <symbol id="i-app-icon" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#0f141a"/><path d="M30 46a10 10 0 0 1 10-10h17a6 6 0 0 1 4.4 2l6 6.4a6 6 0 0 0 4.4 2h22a10 10 0 0 1 10 10v33a10 10 0 0 1-10 10H40a10 10 0 0 1-10-10Z" fill="#b4dc19"/><path d="M57 55 73 67 57 79" fill="none" stroke="#0f141a" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4m0 0 4 4m-4-4-4 4"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></symbol>
+        <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 19a1.8 1.8 0 0 0 3 0"/></symbol>
+        <symbol id="i-kebab" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></symbol>
+        <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+        <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.25 4.15 1 5.85L12 17.8l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z"/></symbol>
+        <symbol id="i-star-fill" viewBox="0 0 24 24"><path d="m12 3.5 2.6 5.3 5.9.9-4.25 4.15 1 5.85L12 17.8l-5.25 2.75 1-5.85L3.5 9.7l5.9-.9z" fill="currentColor" stroke="none"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0-1 12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><path d="M10 11v6M14 11v6"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 18v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1"/></symbol>
+        <symbol id="i-share" viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.2 10.8 7.6-3.6M8.2 13.2l7.6 3.6"/></symbol>
+        <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.5 1.5"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.5-1.5"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 4.5L20 16"/><path d="M20 20v-4h-4"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+        <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 11v4M10 13h4"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12"/><circle cx="12" cy="12" r="2.6"/></symbol>
+        <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.83-2.83L5 17z"/><path d="m14 8 2 2"/></symbol>
+        <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="m9 6 3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+        <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 12h9m0 0-3-3m3 3-3 3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+        <symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M7 16a4 4 0 0 1-.5-7.97"/><path d="M9 5.5A5 5 0 0 1 18 9a3.5 3.5 0 0 1 1.5 6.6"/><path d="M3 3l18 18"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 9v5M12 17.5v.01"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h3l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></symbol>
+        <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8.5 12.5h7M8.5 15.5h7M8.5 18h4"/></symbol>
+        <symbol id="i-file-md" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8 17.5v-4l2 2 2-2v4M15 13.5v3.5m0 0 1.3-1.3M15 17l-1.3-1.3"/></symbol>
+        <symbol id="i-file-image" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><circle cx="10" cy="13" r="1.3"/><path d="M8 19l3-3 2 2 2-2.5 2 3.5"/></symbol>
+        <symbol id="i-file-pdf" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8 18v-4h1.5a1.2 1.2 0 0 1 0 2.4H8M13 14v4M13 14h2M13 16h1.6M16.5 14v4h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1z"/></symbol>
+        <symbol id="i-file-video" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M10 13.5v4l3.5-2z" fill="currentColor" stroke="none"/></symbol>
+        <symbol id="i-file-audio" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 18v-4l4-1v4"/><circle cx="8" cy="18" r="1.2"/><circle cx="12" cy="17" r="1.2"/></symbol>
+        <symbol id="i-file-sheet" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8 13h8M8 16h8M8 19h8M11.5 12v8"/></symbol>
+        <symbol id="i-file-zip" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M11 4v2M12 6v2M11 8v2M12 10v2M11 12h1.5v2.5a.75.75 0 0 1-1.5 0z"/></symbol>
+        <symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M10 13.5 8 16l2 2.5M14 13.5 16 16l-2 2.5"/></symbol>
+      </defs>
+    </svg>
+
+    <!-- ============ AUTH VIEW (signed out / bootstrap) ============ -->
+    <div class="auth-shell">
+      <div class="auth-brand">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 128 128"><use href="#i-app-icon"/></svg></span>
+        <div>
+          <strong>ShellX Drive</strong>
+          <span class="auth-brand-sub">Your self-hosted cloud drive</span>
+          <span id="server-state" class="sr-only">Disconnected</span>
+        </div>
+      </div>
+      <section class="connect-card auth-card" aria-label="Account access">
+        <div class="auth-card-head">
+          <strong id="auth-card-title">Sign in</strong>
+          <span id="auth-status" class="form-status">Checking auth</span>
+        </div>
+        <form id="login-form" class="stack-form">
+          <input id="login-email" type="email" autocomplete="username" placeholder="email@example.com" />
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="Password" />
+          <input id="login-second-factor" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="2FA or recovery code" hidden />
+          <button id="login-button" class="primary-action" type="submit">Sign in</button>
+        </form>
+        <button id="forgot-password-button" class="forgot-password-button subtle-link" type="button" aria-controls="password-reset-request-form" aria-expanded="false">Forgot password?</button>
+        <form id="password-reset-request-form" class="stack-form" hidden>
+          <input id="password-reset-email" type="email" autocomplete="username" placeholder="Reset password email" />
+          <button id="password-reset-request-button" type="submit">Queue reset request</button>
+        </form>
+        <span id="password-reset-status" class="form-status" role="status" aria-live="polite" hidden></span>
+        <form id="bootstrap-form" class="stack-form" hidden>
+          <div class="bootstrap-intro" role="note">
+            <strong>Operator-approved setup</strong>
+            <p>Only someone with the setup token generated on the server can create the first administrator. Opening this page grants no access.</p>
+          </div>
+          <label class="setup-field" for="bootstrap-operator-token">
+            <span>Server setup token</span>
+            <input id="bootstrap-operator-token" type="password" autocomplete="one-time-code" placeholder="Paste the token from the installer" />
+            <small>On the server, use the retrieval command printed after installation.</small>
+          </label>
+          <label class="setup-field" for="bootstrap-email">
+            <span>Administrator email</span>
+            <input id="bootstrap-email" type="email" autocomplete="username" placeholder="admin@example.com" />
+          </label>
+          <label class="setup-field" for="bootstrap-password">
+            <span>Administrator password</span>
+            <input id="bootstrap-password" type="password" autocomplete="new-password" placeholder="Create a strong password" />
+          </label>
+          <label class="setup-field" for="bootstrap-password-confirm">
+            <span>Confirm password</span>
+            <input id="bootstrap-password-confirm" type="password" autocomplete="new-password" placeholder="Enter the password again" />
+          </label>
+          <label class="setup-field" for="bootstrap-workspace-name">
+            <span>First workspace</span>
+            <input id="bootstrap-workspace-name" type="text" value="Personal Drive" placeholder="Personal Drive" />
+          </label>
+          <button id="bootstrap-button" class="primary-action" type="submit">Create admin and workspace</button>
+        </form>
+        <details class="server-token-options">
+          <summary>Operator access</summary>
+          <form id="token-form" class="stack-form" aria-label="Connect with server access token">
+            <input class="sr-only" type="text" autocomplete="username" tabindex="-1" aria-hidden="true" />
+            <input id="token-input" type="password" autocomplete="current-password" placeholder="Server access token" />
+            <input id="actor-input" type="email" autocomplete="username" placeholder="Acting as" />
+            <button type="submit">Connect</button>
+          </form>
+        </details>
+      </section>
+    </div>
+
+    <!-- ============ APP SHELL (signed in) ============ -->
+    <div class="drive-product-shell">
+      <aside class="drive-sidebar" aria-label="Drive navigation">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 128 128"><use href="#i-app-icon"/></svg></span>
+          <div class="brand-text">
+            <strong>ShellX Drive</strong>
+          </div>
+        </div>
+
+        <section class="workspace-section" aria-label="Workspaces">
+          <div class="rail-heading">
+            <span>Workspaces</span>
+            <span class="rail-heading-actions">
+              <button id="workspace-settings-button" class="icon-button" type="button" aria-label="Workspace settings" title="Workspace settings">
+                <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
+              </button>
+              <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh workspaces" title="Refresh workspaces">
+                <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+              </button>
+            </span>
+          </div>
+          <nav id="workspace-list" class="workspace-list"></nav>
+        </section>
+
+        <nav class="drive-nav" aria-label="Drive sections">
+          <button id="view-my-drive-button" class="nav-item active" type="button" data-view-button="my-drive" aria-label="Files">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span>Files</span>
+          </button>
+          <button id="mine-button" class="nav-item" type="button" data-view-button="mine" aria-label="My files">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span>My files</span>
+          </button>
+          <button id="shared-button" class="nav-item" type="button" data-view-button="shared" aria-label="Shared with me">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-share"/></svg>
+            <span>Shared with me</span>
+          </button>
+          <button id="shared-by-me-button" class="nav-item" type="button" data-view-button="shared-by-me" aria-label="Shared by me">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-share"/></svg>
+            <span>Shared by me</span>
+          </button>
+          <button id="recent-button" class="nav-item" type="button" data-view-button="recent" aria-label="Recent">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span>Recent</span>
+          </button>
+          <button id="starred-button" class="nav-item" type="button" data-view-button="starred" aria-label="Starred">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-star"/></svg>
+            <span>Starred</span>
+          </button>
+          <button id="offline-button" class="nav-item" type="button" data-view-button="offline" aria-label="Mobile downloads">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-cloud-off"/></svg>
+            <span>Mobile downloads</span>
+          </button>
+          <button id="trash-view-button" class="nav-item" type="button" data-view-button="trash" aria-label="Trash">
+            <svg class="icon nav-icon" aria-hidden="true"><use href="#i-trash"/></svg>
+            <span>Trash</span>
+          </button>
+        </nav>
+
+        <section class="storage-card" aria-label="Storage">
+          <div class="storage-card-head">
+            <div class="storage-card-id">
+              <strong id="storage-summary-name">No workspace</strong>
+              <span id="storage-summary-mode">Connect to begin</span>
+            </div>
+            <span id="storage-summary-used">0 files</span>
+          </div>
+          <!-- Space usage (used / quota), Google-Drive-style. Hidden until a
+               usage figure is loaded for the current workspace. -->
+          <div id="storage-usage" class="storage-usage" hidden>
+            <div id="storage-usage-track" class="storage-usage-track" role="progressbar" aria-label="Storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span id="storage-usage-fill" class="storage-usage-fill"></span>
+            </div>
+            <span id="storage-usage-label" class="storage-usage-label"></span>
+          </div>
+        </section>
+      </aside>
+
+      <main class="drive-main" aria-label="Files">
+        <section id="offline-shell-notice" class="offline-shell-notice" role="status" hidden>
+          <svg class="icon" aria-hidden="true"><use href="#i-cloud-off"/></svg>
+          <div>
+            <strong>Offline workspace unavailable</strong>
+            <p>Drive cannot confirm this browser session while offline. Navigation remains available; reconnect before viewing files or using account actions.</p>
+          </div>
+          <button id="offline-retry-button" type="button">Try again</button>
+        </section>
+        <header class="drive-topbar">
+          <div class="search-shell">
+            <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input id="search-input" type="search" placeholder="Search files" />
+            <kbd>⌘K</kbd>
+          </div>
+          <div class="topbar-actions">
+            <button id="upload-focus-button" class="secondary-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="upload-menu">
+              <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>
+              <span>Upload</span>
+            </button>
+            <button id="new-menu-button" class="primary-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="new-menu">
+              <svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>
+              <span>New</span>
+            </button>
+            <div class="view-toggle" role="group" aria-label="Layout">
+              <button id="list-view-button" class="icon-button active" type="button" aria-label="List view" title="List view" aria-pressed="true">
+                <svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>
+              </button>
+              <button id="grid-view-button" class="icon-button" type="button" aria-label="Grid view" title="Grid view" aria-pressed="false">
+                <svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>
+              </button>
+            </div>
+            <button id="header-theme-toggle" class="icon-button" type="button" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme">
+              <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
+            </button>
+            <button id="notifications-button" class="notification-button icon-button" type="button" aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications" title="Notifications">
+              <svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>
+              <span id="notification-count" class="notification-count" hidden>0</span>
+            </button>
+            <button id="account-menu-button" class="account-menu-button" type="button" aria-expanded="false" aria-controls="account-panel" aria-label="Account and security" title="Account and security">
+              <span id="account-menu-initial" class="account-avatar" aria-hidden="true">?</span>
+              <span id="account-menu-label" class="account-menu-label">Account</span>
+            </button>
+          </div>
+
+          <div id="new-menu" class="popover-menu" hidden role="menu" aria-label="Create">
+            <button id="new-menu-folder" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-folder-plus"/></svg><span>New folder</span>
+            </button>
+            <button id="new-menu-file" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-file-text"/></svg><span>New text file</span>
+            </button>
+            <div class="popover-divider"></div>
+            <button id="new-menu-upload" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg><span>Upload files</span>
+            </button>
+            <button id="new-menu-upload-folder" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span>Upload folder</span>
+            </button>
+          </div>
+
+          <!-- Upload button's own 2-item menu (issue: the Upload button used to
+               pop the whole drop-zone panel). Mirrors #new-menu; each item opens
+               the matching hidden native picker directly. -->
+          <div id="upload-menu" class="popover-menu" hidden role="menu" aria-label="Upload">
+            <button id="upload-menu-files" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg><span>Upload files</span>
+            </button>
+            <button id="upload-menu-folder" type="button" role="menuitem">
+              <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span>Upload folder</span>
+            </button>
+            <label class="upload-menu-duplicate" for="upload-menu-duplicate-policy">
+              <span>If a file exists</span>
+              <select id="upload-menu-duplicate-policy">
+                <option value="keep_both">Keep both</option>
+                <option value="replace">Replace existing file</option>
+                <option value="cancel">Cancel on conflict</option>
+              </select>
+            </label>
+          </div>
+
+          <section id="notification-panel" class="notification-panel popover-panel" hidden aria-label="Notifications">
+            <div class="notification-panel-head">
+              <div>
+                <span class="eyebrow">Inbox</span>
+                <strong>Notifications</strong>
+              </div>
+              <button id="mark-all-notifications-read-button" type="button">Mark all read</button>
+            </div>
+            <div id="notification-list" class="notification-list"></div>
+          </section>
+
+          <section id="account-panel" class="account-panel popover-panel" hidden aria-label="Account and security">
+            <div class="account-panel-head">
+              <div>
+                <span id="account-panel-eyebrow" class="eyebrow">Signed in</span>
+                <strong id="account-panel-email">No account</strong>
+                <small id="account-panel-role">Password session required</small>
+              </div>
+              <button id="logout-button" type="button">
+                <svg class="icon" aria-hidden="true"><use href="#i-logout"/></svg><span>Log out</span>
+              </button>
+            </div>
+            <div class="account-menu-links">
+              <button id="account-settings-button" type="button" class="account-menu-link">
+                <svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>
+                <span>Settings</span>
+                <small id="account-settings-detail">Security &amp; sessions</small>
+              </button>
+              <button id="account-workspace-settings-button" type="button" class="account-menu-link mobile-workspace-settings-action">
+                <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>
+                <span id="account-workspace-settings-label">Workspace settings</span>
+                <small>Current workspace</small>
+              </button>
+              <button id="theme-toggle-button" type="button" class="account-menu-link" aria-pressed="false">
+                <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
+                <span>Theme</span>
+                <small id="theme-toggle-state">System</small>
+              </button>
+              <button id="account-admin-button" type="button" class="account-menu-link" hidden>
+                <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+                <span>Admin center</span>
+              </button>
+            </div>
+          </section>
+        </header>
+
+        <section class="content-header">
+          <div class="content-heading-block">
+            <div class="breadcrumb">
+              <span id="workspace-subtitle">Workspace</span>
+              <svg class="icon crumb-sep" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+              <strong id="current-view-label">My Drive</strong>
+            </div>
+            <nav id="folder-breadcrumb" class="folder-breadcrumb" aria-label="Folder path"></nav>
+            <h1 id="workspace-title">No workspace selected</h1>
+          </div>
+          <div class="content-tabs" aria-label="File filters">
+            <button type="button" class="active" data-file-filter="all" aria-pressed="true">All</button>
+            <button type="button" data-file-filter="folders" aria-pressed="false">Folders</button>
+            <button type="button" data-file-filter="docs" aria-pressed="false">Docs</button>
+            <button type="button" data-file-filter="sheets" aria-pressed="false">Sheets</button>
+            <button type="button" data-file-filter="pdfs" aria-pressed="false">PDFs</button>
+          </div>
+        </section>
+
+        <section class="browser-toolbar" aria-label="File browser sorting and filters">
+          <div class="browser-sort-controls">
+            <label>
+              <span>Sort</span>
+              <select id="file-sort-key">
+                <option value="name">Name</option>
+                <option value="modified">Modified</option>
+                <option value="size">Size</option>
+                <option value="type">Type</option>
+              </select>
+            </label>
+            <button id="file-sort-direction" type="button" aria-label="Sort ascending" aria-pressed="false">Ascending</button>
+            <label class="browser-checkbox"><input id="folders-first" type="checkbox" checked /><span>Folders first</span></label>
+          </div>
+          <button id="browser-filter-toggle" class="browser-filter-toggle" type="button" aria-expanded="false" aria-controls="browser-filter-panel">
+            <svg class="icon" aria-hidden="true"><use href="#i-filter"/></svg>
+            <span>Filters</span><span id="browser-filter-count" class="browser-filter-count" hidden>0</span>
+          </button>
+          <div id="browser-filter-panel" class="browser-filter-panel" hidden>
+            <p id="browser-filter-scope-note" hidden>Filters are available in My files and Recent. Shared pages include access from other owners and are shown in server order.</p>
+            <label><span>Type</span><select id="browser-type-filter">
+              <option value="all">Any type</option><option value="folders">Folders</option>
+              <option value="docs">Documents</option><option value="sheets">Spreadsheets</option>
+              <option value="pdfs">PDFs</option><option value="images">Images</option>
+              <option value="videos">Videos</option><option value="audio">Audio</option>
+              <option value="archives">Archives</option>
+            </select></label>
+            <label><span>Owner relationship</span><select id="browser-owner-filter">
+              <option value="any">Anyone</option><option value="owned">Owned by me</option>
+              <option value="shared">Shared with me</option>
+            </select></label>
+            <label><span>Modified</span><select id="browser-modified-filter">
+              <option value="any">Any time</option><option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option><option value="365">Last year</option>
+            </select></label>
+            <label><span>Location</span><select id="browser-location-filter">
+              <option value="any">Any location</option><option value="workspace">Current workspace</option>
+              <option value="folder">Current folder and descendants</option>
+            </select></label>
+            <label><span>State</span><select id="browser-state-filter">
+              <option value="any">Any state</option><option value="shared">Guest link active</option>
+              <option value="starred">Starred</option><option value="offline">Marked for mobile download</option>
+            </select></label>
+            <button id="browser-filter-clear" type="button">Clear filters</button>
+          </div>
+        </section>
+
+        <!-- Trash toolbar (empty trash) shown only in trash view -->
+        <section class="trash-toolbar" aria-label="Trash tools">
+          <span class="trash-toolbar-note">Items past the retention window are eligible for an administrator to delete permanently.</span>
+          <button id="empty-trash-button" class="danger-action" type="button">
+            <svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>Empty trash</span>
+          </button>
+        </section>
+
+        <!-- Real empty states (state controller renders the right one) -->
+        <section id="empty-state" class="empty-state" aria-live="polite"></section>
+
+        <!-- Create/upload surface — revealed by the New menu / Upload button -->
+        <section class="quick-create" aria-label="Create or upload files">
+          <div class="quick-create-head">
+            <strong id="quick-create-title">Add to this folder</strong>
+            <button id="quick-create-close" class="icon-button" type="button" aria-label="Close create panel" title="Close create panel">
+              <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+          </div>
+          <div id="upload-drop-zone" class="upload-drop-zone" tabindex="0" role="button" aria-label="Drop files here or choose files to upload">
+            <svg class="icon drop-icon" aria-hidden="true"><use href="#i-upload"/></svg>
+            <div>
+              <strong>Drop files here</strong>
+              <span id="upload-progress-summary">Choose files or folders to upload into the current folder.</span>
+            </div>
+            <div class="upload-drop-actions">
+              <button id="choose-files-button" type="button">Choose files</button>
+              <button id="choose-folder-button" type="button">Choose folder</button>
+              <button id="camera-upload-button" class="camera-upload-action" type="button">Camera</button>
+            </div>
+            <input id="upload-file-picker" type="file" multiple hidden />
+            <input id="upload-folder-picker" type="file" webkitdirectory directory multiple hidden />
+            <input id="camera-upload-input" type="file" accept="image/*" capture="environment" hidden />
+            <input id="upload-resume-picker" type="file" hidden />
+          </div>
+          <div class="upload-queue-tools">
+            <label for="upload-duplicate-policy">If a file already exists</label>
+            <select id="upload-duplicate-policy">
+              <option value="keep_both">Keep both</option>
+              <option value="replace">Replace existing file</option>
+              <option value="cancel">Cancel on conflict</option>
+            </select>
+            <span>Up to 3 files upload at once. Recovery saves metadata only, never file contents.</span>
+          </div>
+          <div class="upload-aggregate" data-upload-aggregate hidden>
+            <div class="upload-aggregate-copy">
+              <span>Overall progress</span>
+              <strong data-upload-aggregate-value>0 B of 0 B · 0%</strong>
+            </div>
+            <span class="upload-progress-track" data-upload-aggregate-track role="progressbar" aria-label="Overall upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0 B of 0 B, 0%">
+              <span class="upload-progress-bar" data-upload-aggregate-bar></span>
+            </span>
+          </div>
+          <div id="upload-queue" class="upload-queue"></div>
+        </section>
+
+        <section class="file-workbench" aria-label="File browser">
+          <div id="bulk-action-toolbar" class="bulk-action-toolbar" aria-live="polite">
+            <span id="bulk-selection-count">No items selected</span>
+            <div class="bulk-action-buttons">
+              <button id="bulk-download-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span></button>
+              <button id="bulk-move-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-move"/></svg><span>Move to…</span></button>
+              <button id="bulk-star-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Star</span></button>
+              <button id="bulk-unstar-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg><span>Unstar</span></button>
+              <button id="bulk-trash-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>Trash</span></button>
+              <button id="bulk-restore-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Restore</span></button>
+            </div>
+          </div>
+          <table id="file-table" class="file-table">
+            <thead>
+              <tr>
+                <th class="check-column"><input id="select-visible-files" type="checkbox" aria-label="Select visible files" /></th>
+                <th>Name</th>
+                <th class="type-column">Type</th>
+                <th class="modified-column">Modified</th>
+                <th class="size-column">Size</th>
+                <th class="actions-column"><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="file-rows"></tbody>
+          </table>
+          <div class="selection-bar" aria-live="polite">
+            <span id="file-count">0 items</span>
+            <nav id="file-pagination" class="file-pagination" aria-label="File pages" hidden>
+              <button id="file-page-previous" type="button" aria-label="Previous file page">Previous</button>
+              <span id="file-page-position">Page 1 of 1</span>
+              <button id="file-page-next" type="button" aria-label="Next file page">Next</button>
+            </nav>
+            <div class="selection-bar-actions">
+              <button id="bottom-share-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg><span>Share</span></button>
+              <button id="bottom-download-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span></button>
+              <button id="bottom-open-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg><span>Open</span></button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector" aria-label="File inspector">
+        <div class="inspector-empty">
+          <svg class="icon inspector-empty-icon" aria-hidden="true"><use href="#i-eye"/></svg>
+          <p>Select a file to see its preview, sharing, comments and history.</p>
+        </div>
+
+        <div class="inspector-body">
+          <section class="selection-card">
+            <div class="inspector-head">
+              <div class="inspector-head-title">
+                <span class="inspector-label">Selected</span>
+                <h2 id="selected-title">Nothing selected</h2>
+              </div>
+              <div class="inspector-actions">
+                <button id="star-button" class="icon-button" type="button" aria-label="Star file" title="Star file">
+                  <svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>
+                </button>
+                <button id="close-selection-button" class="icon-button" type="button" aria-label="Close inspector" title="Close inspector">
+                  <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+                </button>
+              </div>
+            </div>
+            <div id="selection-preview" class="selection-preview">
+              <span class="empty-icon" aria-hidden="true"><svg class="icon"><use href="#i-file"/></svg></span>
+              <p>Select a file to preview details, share access, comments, and history.</p>
+            </div>
+            <pre id="selected-meta" class="technical-output" aria-live="polite" hidden></pre>
+          </section>
+
+          <section class="inspector-actions-grid" aria-label="File actions">
+            <button id="preview-open-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg><span>Preview</span></button>
+            <button id="open-share-drawer-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg><span>Share</span></button>
+            <button id="download-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span></button>
+            <button id="download-folder-zip-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Download folder</span></button>
+            <button id="copy-file-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span></button>
+            <button id="open-editor-button" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg><span>Edit online</span></button>
+            <button id="trash-button" type="button"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>Move to trash</span></button>
+            <button id="restore-button" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Restore</span></button>
+            <button id="delete-permanently-button" class="danger-action" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg><span>Delete permanently</span></button>
+          </section>
+          <div id="office-provider-status" class="office-provider-status" hidden></div>
+
+          <section class="share-card" aria-label="Sharing">
+            <div class="section-line">
+              <h3>Sharing</h3>
+            </div>
+            <div id="share-summary" class="link-access-card">
+              <span class="link-icon" aria-hidden="true"><svg class="icon"><use href="#i-link"/></svg></span>
+              <span>
+                <strong>Link access</strong>
+                <small>Select an item to view guest-link details.</small>
+              </span>
+            </div>
+            <details class="share-options">
+              <summary>Link settings</summary>
+              <form id="share-form" class="stack-form">
+                <input id="share-password" type="password" autocomplete="new-password" placeholder="Optional password" />
+                <label class="share-setting-check" for="share-allow-download">
+                  <input id="share-allow-download" type="checkbox" checked />
+                  <span>Allow guests to download</span>
+                </label>
+                <label class="field-label" for="share-recipient-note">Message for guests</label>
+                <textarea id="share-recipient-note" rows="2" maxlength="500" placeholder="Optional note shown on the guest page"></textarea>
+                <label class="field-label" for="share-max-uses">Maximum visits</label>
+                <input id="share-max-uses" type="number" min="1" max="1000000" placeholder="Unlimited" />
+                <label class="field-label" for="share-expiry">Link expires after</label>
+                <select id="share-expiry" aria-label="Share link expiry">
+                  <option value="3600">1 hour</option>
+                  <option value="86400">24 hours</option>
+                  <option value="604800" selected>7 days</option>
+                  <option value="2592000">30 days</option>
+                  <option value="0">Never</option>
+                </select>
+                <button type="submit" class="primary-action">Create guest link</button>
+              </form>
+            </details>
+            <pre id="share-output" class="operation-output" hidden></pre>
+          </section>
+
+          <section class="comment-card" aria-label="Comments">
+            <div class="section-line">
+              <h3>Comments</h3>
+            </div>
+            <div id="comment-list" class="comment-list"></div>
+            <form id="comment-form" class="comment-form">
+              <textarea id="comment-body" rows="2" placeholder="Write a comment..."></textarea>
+              <button type="submit">Add comment</button>
+            </form>
+          </section>
+
+          <section class="details-card" aria-label="File details">
+            <details>
+              <summary>Rename, move &amp; history</summary>
+              <form id="file-details-form" class="stack-form">
+                <label class="field-label" for="file-detail-name">Name</label>
+                <input id="file-detail-name" type="text" placeholder="File name" />
+                <label class="field-label" for="file-parent-select">Folder</label>
+                <select id="file-parent-select" aria-label="Parent folder"></select>
+                <label class="field-label" for="file-labels">Labels</label>
+                <input id="file-labels" type="text" placeholder="labels, comma-separated" />
+                <button id="clear-file-labels-button" type="button">Clear labels</button>
+                <textarea id="file-metadata" rows="3" placeholder="Custom metadata JSON"></textarea>
+                <div class="button-grid">
+                  <button id="save-file-details-button" type="button">Save details</button>
+                  <button id="save-content-button" type="button">Save local edit</button>
+                </div>
+              </form>
+              <textarea id="selected-content" rows="6" placeholder="Open a file locally to edit text content"></textarea>
+              <div class="button-grid">
+                <button id="load-content-button" type="button">Open for editing</button>
+                <button id="load-revisions-button" type="button">Load revisions</button>
+              </div>
+              <div class="revision-controls">
+                <select id="revision-select" aria-label="Revision"></select>
+                <button id="restore-revision-button" type="button">Restore revision</button>
+                <button id="revision-download-button" type="button">Download</button>
+                <button id="revision-pin-button" type="button">Pin</button>
+                <button id="revision-unpin-button" type="button">Unpin</button>
+                <button id="revision-delete-button" class="danger-action" type="button">Delete</button>
+                <button id="revision-prune-button" type="button">Prune by policy</button>
+              </div>
+              <pre id="revisions-output" class="operation-output" hidden></pre>
+            </details>
+          </section>
+
+          <!-- Activity + Versions are collapsible "log" sections pinned to the
+               bottom of the inspector (issue #7). These lists grow over time, so
+               they live in expandable disclosures below Details rather than as
+               always-open top blocks. Collapsed by default; expand in place. -->
+          <details id="inspector-activity-section" class="inspector-log-section" aria-label="Activity">
+            <summary class="inspector-log-summary">
+              <span>Activity</span>
+              <svg class="icon inspector-log-chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+            </summary>
+            <div id="activity-list" class="activity-list"></div>
+          </details>
+          <details id="inspector-versions-section" class="inspector-log-section" aria-label="Versions">
+            <summary class="inspector-log-summary">
+              <span>Versions</span>
+              <svg class="icon inspector-log-chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+            </summary>
+            <div id="versions-list" class="version-list inspector-versions-list"></div>
+          </details>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ============ Shared file-row context menu (one element, repositioned) ============ -->
+    <div id="file-context-menu" class="context-menu" hidden role="menu" aria-label="File actions"></div>
+
+    <!-- ============ Workspace settings drawer (lifecycle + members) ============ -->
+    <div id="workspace-settings-drawer" class="drawer" hidden aria-label="Workspace settings">
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div>
+            <span class="inspector-label">Workspace</span>
+            <h2 id="workspace-settings-title">Workspace settings</h2>
+          </div>
+          <button id="workspace-settings-close" class="icon-button" type="button" aria-label="Close workspace settings" title="Close workspace settings">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+
+        <section id="workspace-lifecycle-panel" class="workspace-lifecycle-panel" aria-label="Workspace lifecycle">
+          <h3>Details</h3>
+          <form id="workspace-rename-form" class="inline-form">
+            <input id="workspace-rename-name" type="text" placeholder="Rename current workspace" />
+            <button id="workspace-rename-button" type="submit">Rename</button>
+          </form>
+          <details id="workspace-lifecycle-management" class="settings-advanced workspace-danger-zone">
+            <summary>Ownership and workspace lifecycle</summary>
+            <form id="workspace-transfer-form" class="inline-form">
+              <input id="workspace-transfer-email" type="email" autocomplete="off" placeholder="Transfer owner to" />
+              <button id="workspace-transfer-button" type="submit">Transfer</button>
+            </form>
+            <div class="workspace-lifecycle-actions">
+              <button id="workspace-archive-button" type="button">Archive</button>
+              <button id="workspace-unarchive-button" type="button">Unarchive</button>
+            </div>
+          </details>
+          <button id="workspace-leave-button" type="button">Leave workspace</button>
+          <div id="workspace-lifecycle-output" class="operation-output" hidden></div>
+        </section>
+
+        <section class="create-workspace-panel" aria-label="Create workspace">
+          <h3>Create a workspace</h3>
+          <form id="workspace-form" class="workspace-create stack-form">
+            <input id="workspace-name" type="text" placeholder="New workspace" />
+            <input id="workspace-owner" type="email" autocomplete="off" placeholder="owner@example.test" />
+            <button type="submit">Create</button>
+          </form>
+        </section>
+
+        <section id="workspace-member-settings" class="member-card" aria-label="Members">
+          <div class="section-line">
+            <h3>Members</h3>
+          </div>
+          <form id="workspace-invitation-form" class="inline-form">
+            <input id="workspace-invitation-email" type="email" autocomplete="off" placeholder="Invite by email" />
+            <select id="workspace-invitation-role" aria-label="Invitation role">
+              <option value="viewer">Can view</option>
+              <option value="editor">Can edit</option>
+              <option value="owner">Owner</option>
+            </select>
+            <select id="workspace-invitation-expiry" aria-label="Collaborator access duration">
+              <option value="0">Access does not expire</option>
+              <option value="604800">Access for 7 days</option>
+              <option value="2592000">Access for 30 days</option>
+              <option value="7776000">Access for 90 days</option>
+            </select>
+            <button id="workspace-invitation-button" type="submit">Invite</button>
+          </form>
+          <section id="workspace-invitation-link" class="invitation-link-output" aria-labelledby="workspace-invitation-link-title" hidden>
+            <strong id="workspace-invitation-link-title">Invitation link ready</strong>
+            <label for="workspace-invitation-link-input">One-time invitation link</label>
+            <input id="workspace-invitation-link-input" type="text" autocomplete="off" readonly spellcheck="false" />
+            <div class="button-grid">
+              <button id="workspace-invitation-copy-link-button" type="button">Copy link</button>
+              <button id="workspace-invitation-hide-link-button" type="button">Hide link</button>
+            </div>
+            <p id="workspace-invitation-link-status" class="drawer-copy" role="status" aria-live="polite"></p>
+          </section>
+          <div id="invitation-list" class="invitation-list"></div>
+          <div id="member-list" class="member-list"></div>
+          <details class="member-options">
+            <summary>Direct member access</summary>
+            <form id="member-form" class="inline-form">
+              <input id="member-email" type="email" autocomplete="off" placeholder="Add person" />
+              <select id="member-role" aria-label="Member role">
+                <option value="viewer">Can view</option>
+                <option value="editor">Can edit</option>
+                <option value="owner">Owner</option>
+              </select>
+              <button type="submit">Add directly</button>
+            </form>
+            <form id="member-remove-form" class="inline-form compact-remove">
+              <input id="member-remove-email" type="email" autocomplete="off" placeholder="Remove person" />
+              <button type="submit">Remove</button>
+            </form>
+          </details>
+        </section>
+
+        <section id="shared-by-me-panel" class="managed-links-panel" aria-label="Shared by me">
+          <div class="section-line">
+            <h3>Shared by me</h3>
+            <button id="share-management-refresh-button" type="button">Refresh</button>
+          </div>
+          <div id="share-management-list" class="managed-link-list"></div>
+          <p class="drawer-copy">Select a link to open its single Link settings panel in the file inspector.</p>
+        </section>
+
+        <section id="workspace-file-activity" class="workspace-settings-section" aria-label="File activity">
+          <div class="section-line">
+            <div>
+              <span class="settings-eyebrow">Workspace insight</span>
+              <h3>File activity</h3>
+            </div>
+            <button id="workspace-statistics-refresh" type="button">Refresh</button>
+          </div>
+          <p class="drawer-copy">Successful previews and downloads in this workspace. Thumbnails do not count.</p>
+          <div id="workspace-statistics-summary" class="workspace-statistics-summary"></div>
+          <div id="workspace-statistics-list" class="workspace-statistics-list"></div>
+        </section>
+
+        <div id="workspace-policy-settings-slot" class="workspace-settings-slot"></div>
+        <div id="workspace-tools-settings-slot" class="workspace-settings-slot"></div>
+      </div>
+    </div>
+
+    <!-- ============ Settings drawer (account security home) ============ -->
+    <div id="settings-drawer" class="drawer" hidden aria-label="Settings" role="dialog" aria-modal="true">
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div>
+            <span class="inspector-label">Account</span>
+            <h2>Settings</h2>
+          </div>
+          <button id="settings-close" class="icon-button" type="button" aria-label="Close settings" title="Close settings">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <p class="drawer-copy">Signed in as <strong id="settings-account-email">—</strong></p>
+
+        <section id="settings-credential-notice" class="settings-section" aria-label="Credential settings" hidden>
+          <div class="settings-section-head">
+            <div>
+              <span class="settings-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><span>Credential</span></span>
+              <h3 id="settings-credential-title">Operator access</h3>
+            </div>
+          </div>
+          <p id="settings-credential-copy" class="settings-hint">Account security settings do not apply to this credential.</p>
+        </section>
+
+        <section id="settings-two-factor-section" class="settings-section" aria-label="Two-factor authentication">
+          <div class="settings-section-head">
+            <div>
+              <span class="settings-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg><span>Security</span></span>
+              <h3>Two-factor authentication</h3>
+            </div>
+            <span id="totp-status-chip" class="status-chip">Not enabled</span>
+          </div>
+          <p class="settings-hint">Add a one-time code from an authenticator app (Google Authenticator, 1Password, Aegis…) as a second factor at sign-in.</p>
+
+          <!-- Step 1 — confirm password, request a secret -->
+          <form id="totp-setup-form" class="settings-inline-form">
+            <input class="sr-only js-account-username" type="text" autocomplete="username" tabindex="-1" aria-hidden="true" />
+            <label class="settings-field">
+              <span>Current password</span>
+              <input id="totp-setup-password" type="password" autocomplete="current-password" placeholder="Current password" />
+            </label>
+            <label id="totp-setup-current-factor-field" class="settings-field" hidden>
+              <span>Current authenticator or recovery code</span>
+              <input id="totp-setup-current-factor" type="text" autocomplete="one-time-code" placeholder="123456 or recovery code" />
+            </label>
+            <button id="totp-setup-button" type="button" class="primary-action">Set up 2FA</button>
+          </form>
+
+          <!-- Step 2 — scan the QR (or key in the secret), then verify a code -->
+          <div id="totp-setup-result" class="totp-setup-result" hidden>
+            <div class="totp-qr-block">
+              <canvas id="totp-qr" class="totp-qr" width="204" height="204" aria-label="Two-factor setup QR code"></canvas>
+              <div class="totp-qr-copy">
+                <strong>Scan with your authenticator app</strong>
+                <p>Can’t scan? Enter this setup key manually:</p>
+                <code id="totp-secret-display" class="totp-secret"></code>
+                <details class="totp-uri-details">
+                  <summary>Show setup link</summary>
+                  <code id="totp-otpauth-uri" class="totp-uri"></code>
+                </details>
+              </div>
+            </div>
+            <form id="totp-enable-form" class="settings-inline-form">
+              <label class="settings-field">
+                <span>Enter the 6-digit code</span>
+                <input id="totp-enable-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" />
+              </label>
+              <button id="totp-enable-button" type="button" class="primary-action">Enable 2FA</button>
+            </form>
+          </div>
+
+          <details class="settings-advanced">
+            <summary>Recovery codes &amp; turn off 2FA</summary>
+            <div class="account-security-grid">
+              <label>
+                <span>Disable 2FA</span>
+                <input id="totp-disable-code" type="text" autocomplete="one-time-code" placeholder="Code or recovery code" />
+              </label>
+              <button id="totp-disable-button" type="button">Disable 2FA</button>
+              <label>
+                <span>Rotate recovery codes</span>
+                <input id="recovery-rotate-code" type="text" autocomplete="one-time-code" placeholder="123456 or code" />
+              </label>
+              <button id="recovery-rotate-button" type="button">Rotate recovery codes</button>
+            </div>
+          </details>
+          <div id="account-security-output" class="admin-live-list"></div>
+        </section>
+
+        <section id="settings-password-section" class="settings-section" aria-label="Change password">
+          <h3>Change password</h3>
+          <p class="settings-hint">Changing your password signs out every browser and app token for this account.</p>
+          <form id="change-password-form" class="stack-form settings-password-form">
+            <input class="sr-only js-account-username" type="text" autocomplete="username" tabindex="-1" aria-hidden="true" />
+            <label class="settings-field">
+              <span>Current password</span>
+              <input id="change-password-current" type="password" autocomplete="current-password" required />
+            </label>
+            <label class="settings-field">
+              <span>New password</span>
+              <input id="change-password-new" type="password" autocomplete="new-password" minlength="12" required />
+            </label>
+            <label class="settings-field">
+              <span>Confirm new password</span>
+              <input id="change-password-confirm" type="password" autocomplete="new-password" minlength="12" required />
+            </label>
+            <div id="change-password-second-factor-step" class="password-step-up" hidden>
+              <strong>Confirm with 2FA</strong>
+              <p class="settings-hint">Enter your authenticator code or a recovery code to finish changing the password.</p>
+              <label class="settings-field">
+                <span>Authenticator or recovery code</span>
+                <input id="change-password-second-factor" type="text" autocomplete="one-time-code" />
+              </label>
+            </div>
+            <p id="change-password-status" class="form-status" role="status" aria-live="polite" hidden></p>
+            <button id="change-password-button" type="submit">Change password</button>
+          </form>
+        </section>
+
+        <section id="settings-sessions-section" class="settings-section" aria-label="Active sessions">
+          <div class="section-line">
+            <h3>Signed-in browsers</h3>
+            <div class="admin-form-actions">
+              <button data-revoke-other-self-sessions type="button">Sign out other browsers</button>
+              <button id="refresh-self-sessions-button" type="button">Refresh</button>
+            </div>
+          </div>
+          <p class="settings-help">Only you and server administrators can see the browser, IP address, sign-in time, and last-seen time for your account sessions.</p>
+          <p class="settings-hint">Each row is one browser sign-in. Drive marks this browser and shows its server-observed browser, IP address, sign-in time, last-seen time, and short reference.</p>
+          <p class="settings-note">An IP may identify a VPN or trusted reverse proxy rather than the physical device. Revoke any session you do not recognize.</p>
+          <div id="self-sessions-list" class="session-list"></div>
+          <div class="section-line settings-subsection-line">
+            <h3>Recent sign-in activity</h3>
+            <button id="refresh-self-security-events-button" type="button">Refresh</button>
+          </div>
+          <p class="settings-hint">Your successful, challenged, blocked, and rejected sign-ins from the last 90 days. Other accounts and guest-link visitors are never shown here.</p>
+          <div id="self-security-events-list" class="admin-live-list"></div>
+        </section>
+
+        <section id="settings-ai-agents-section" class="settings-section" aria-label="AI Agents" hidden>
+          <div class="settings-section-head">
+            <div>
+              <span class="settings-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg><span>Folder access</span></span>
+              <h3>Folder-scoped AI workers</h3>
+            </div>
+          </div>
+          <p class="settings-hint">Reusable AI workers receive folder-by-folder View or Edit access. Rotating a key replaces it for every assigned folder.</p>
+          <div id="settings-ai-agents-credential"></div>
+          <div id="settings-ai-agents-list" class="settings-agent-list" aria-live="polite"></div>
+        </section>
+
+        <section id="settings-agent-delegations-section" class="settings-section" aria-label="Account-wide AI agents" hidden>
+          <div class="settings-section-head">
+            <div>
+              <span class="settings-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg><span>Account-wide delegation</span></span>
+              <h3>Account-wide AI agents</h3>
+            </div>
+          </div>
+          <p id="settings-agent-delegations-scope" class="settings-hint"></p>
+          <p class="settings-note">Use a folder-scoped AI worker above when the task must stay inside one folder. An account-wide key is a separate credential and is shown only when created or rotated.</p>
+          <form id="settings-agent-delegations-form" class="settings-inline-form" data-delegated-agent-form>
+            <label class="settings-field">Agent name
+              <input name="delegated_agent_name" type="text" maxlength="120" autocomplete="off" placeholder="Research assistant" required />
+            </label>
+            <label class="settings-field">Key lifetime
+              <select name="delegated_agent_expiry" data-delegated-agent-expiry>
+                <option value="86400">1 day</option>
+                <option value="604800">7 days</option>
+                <option value="2592000" selected>30 days</option>
+                <option value="7776000">90 days</option>
+              </select>
+            </label>
+            <button type="submit" class="primary-action" data-delegated-agent-create>Create account-wide agent</button>
+          </form>
+          <div id="settings-agent-delegations-status" class="drawer-agent-status" aria-live="polite"></div>
+          <div id="settings-agent-delegations-credential"></div>
+          <div id="settings-agent-delegations-list" class="settings-agent-list" aria-live="polite"></div>
+        </section>
+
+        <section class="settings-section" aria-label="About and updates">
+          <div class="section-line"><h3>About</h3></div>
+          <dl class="about-grid">
+            <div><dt>Version</dt><dd id="about-version">—</dd></div>
+            <div><dt>Build</dt><dd><code id="about-build">—</code></dd></div>
+            <div><dt>Released</dt><dd id="about-built-at">—</dd></div>
+          </dl>
+          <div id="about-server-update-panel" class="about-server-update-panel" hidden>
+            <div class="section-line">
+              <div>
+                <strong>Server software</strong>
+                <p class="settings-hint">Administrator-only. Review the release and backup this server before installing it manually.</p>
+              </div>
+              <button id="about-check-update-button" type="button">Check for updates</button>
+            </div>
+            <div id="about-update-status" class="about-update-status" hidden></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============ Share drawer ============ -->
+    <div id="share-drawer" class="share-drawer drawer" hidden aria-label="Share drawer">
+      <div class="drawer-panel">
+        <div class="drawer-head">
+          <div>
+            <span class="inspector-label">Share</span>
+            <h2>Project file</h2>
+          </div>
+          <button id="close-share-drawer-button" class="icon-button" type="button" aria-label="Close share drawer" title="Close share drawer">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <p class="drawer-copy">Give people or groups item access, control an explicit everyone grant, then manage guest links and AI access separately.</p>
+        <div class="drawer-share-form"></div>
+      </div>
+    </div>
+
+    <!-- ============ Preview modal (inline media preview surface) ============ -->
+    <div id="preview-modal" class="preview-modal" hidden aria-labelledby="preview-modal-title" role="dialog" aria-modal="true">
+      <div class="preview-modal-panel">
+        <div class="preview-modal-head">
+          <div class="preview-modal-heading">
+            <strong id="preview-modal-title">Preview</strong>
+            <span id="preview-modal-position" aria-live="polite"></span>
+          </div>
+          <div class="preview-modal-actions">
+            <button id="preview-modal-download" type="button"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span></button>
+            <button id="preview-modal-close" class="icon-button" type="button" aria-label="Close preview" title="Close preview">
+              <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="preview-modal-stage">
+          <button id="preview-modal-previous" class="preview-modal-navigation previous" type="button" aria-label="Previous preview" title="Previous preview" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg>
+          </button>
+          <div id="preview-modal-body" class="preview-modal-body"></div>
+          <button id="preview-modal-next" class="preview-modal-navigation next" type="button" aria-label="Next preview" title="Next preview" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Confirm dialog (destructive actions) ============ -->
+    <div id="confirm-dialog" class="confirm-dialog" hidden role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message">
+      <div class="confirm-dialog-panel">
+        <strong id="confirm-dialog-title">Are you sure?</strong>
+        <p id="confirm-dialog-message"></p>
+        <div class="confirm-dialog-actions">
+          <button id="confirm-dialog-cancel" type="button">Cancel</button>
+          <button id="confirm-dialog-confirm" class="danger-action" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Move-to folder picker ============ -->
+    <!-- Compact create modal (New folder / New text file). Google-Drive-style
+         centered dialog; replaces the old full-width quick-create name bar
+         (owner: "feels very lazy design"). The two forms keep their original ids
+         so createFolder()/uploadFile() and the canCreate disabling wiring stay
+         intact; CSS shows only the form matching data-create-mode. -->
+    <div id="create-dialog" class="create-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="create-dialog-title" data-create-mode="folder">
+      <div class="create-dialog-panel">
+        <div class="create-dialog-head">
+          <strong id="create-dialog-title">New folder</strong>
+          <button id="create-dialog-close" class="icon-button" type="button" aria-label="Close" title="Close">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <form id="create-folder-form" class="create-form">
+          <label class="create-field">
+            <span class="create-field-label">Folder name</span>
+            <input id="create-folder-name" type="text" placeholder="Untitled folder" autocomplete="off" />
+          </label>
+          <div class="create-dialog-actions">
+            <button type="button" class="create-cancel" data-create-cancel>Cancel</button>
+            <button id="create-folder-button" type="submit" class="primary-action">Create</button>
+          </div>
+        </form>
+        <form id="file-form" class="create-form">
+          <label class="create-field">
+            <span class="create-field-label">File name</span>
+            <input id="file-name" type="text" placeholder="Untitled.md" autocomplete="off" />
+          </label>
+          <label class="create-field">
+            <span class="create-field-label">Content <span class="create-field-hint">(optional)</span></span>
+            <textarea id="file-content" rows="4" placeholder="Paste text content or quick notes"></textarea>
+          </label>
+          <div class="create-dialog-actions">
+            <button type="button" class="create-cancel" data-create-cancel>Cancel</button>
+            <button type="submit" class="primary-action">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="move-dialog" class="move-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="move-dialog-title">
+      <div class="move-dialog-panel">
+        <div class="move-dialog-head">
+          <strong id="move-dialog-title">Move to…</strong>
+          <button id="move-dialog-close" class="icon-button" type="button" aria-label="Close move picker" title="Close move picker">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+        <p class="move-dialog-copy">Choose a destination folder.</p>
+        <label class="move-collision-policy" for="move-collision-policy">
+          <span>When a name exists</span>
+          <select id="move-collision-policy">
+            <option value="keep_both">Keep both</option>
+            <option value="replace">Replace matching file</option>
+            <option value="cancel">Cancel that move</option>
+          </select>
+        </label>
+        <div id="move-dialog-list" class="move-dialog-list" role="menu" aria-label="Move destinations"></div>
+        <div class="move-dialog-actions">
+          <button id="move-dialog-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Mobile bottom sheet ============ -->
+    <section id="mobile-file-sheet" class="mobile-bottom-sheet" aria-label="Selected file actions">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div id="mobile-sheet-summary">
+        <strong>No file selected</strong>
+        <span>Select a file to share, comment, or mark for mobile download.</span>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" data-mobile-action="dismiss"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg><span>Done</span></button>
+        <button type="button" data-mobile-action="open"><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg><span>Open</span></button>
+        <button type="button" data-mobile-action="share"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg><span>Share</span></button>
+        <button type="button" data-mobile-action="comment"><svg class="icon" aria-hidden="true"><use href="#i-edit"/></svg><span>Comment</span></button>
+        <button type="button" data-mobile-action="offline"><svg class="icon" aria-hidden="true"><use href="#i-cloud-off"/></svg><span>Mark for mobile download</span></button>
+      </div>
+    </section>
+
+    <!-- ============ Server administration (server admin/operator only) ============ -->
+    <section id="advanced-workbench" hidden class="advanced-workbench" aria-label="Server administration">
+      <div class="advanced-panel">
+        <header class="advanced-header">
+          <div>
+            <span class="inspector-label">Server</span>
+            <h2>ShellX Drive administration</h2>
+          </div>
+          <span class="advanced-scope">Server administration</span>
+          <button id="advanced-close-button" class="icon-button" type="button" aria-label="Close server administration" title="Close server administration">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </header>
+
+        <div class="advanced-grid" data-advanced-active="admin">
+          <section id="advanced-section-tools" class="advanced-section" data-advanced-panel="tools">
+            <div class="advanced-tools-grid">
+              <section>
+                <span class="inspector-label">Resumable upload</span>
+                <form id="resumable-upload-form" class="stack-form">
+                  <input id="upload-session-name" type="text" placeholder="Resumable file name" />
+                  <input id="upload-session-total-size" type="number" min="0" placeholder="Total bytes" />
+                  <textarea id="upload-chunk-content" rows="2" placeholder="Next chunk content"></textarea>
+                  <div class="button-grid">
+                    <button type="submit">Start session</button>
+                    <button id="append-upload-button" type="button">Append chunk</button>
+                    <button id="finish-upload-button" type="button">Finish upload</button>
+                  </div>
+                </form>
+                <div class="button-grid">
+                  <button id="refresh-upload-sessions-button" type="button">Refresh sessions</button>
+                  <button id="cancel-upload-session-button" type="button">Cancel selected</button>
+                  <button id="cleanup-uploads-button" type="button">Cleanup stale</button>
+                </div>
+                <div id="upload-session-list" class="upload-session-list"></div>
+                <pre id="upload-status" class="operation-output"></pre>
+              </section>
+
+              <section>
+                <span class="inspector-label">Mobile</span>
+                <div class="button-grid">
+                  <button id="mobile-offline-button" type="button">Mark for mobile download</button>
+                  <button id="mobile-online-button" type="button">Remove mobile download mark</button>
+                  <button id="mobile-manifest-button" type="button">Save file list</button>
+                </div>
+                <div id="mobile-offline-status" class="mobile-offline-status">Metadata-only file list not saved yet. This web build does not store file bodies.</div>
+                <pre id="mobile-output" class="operation-output"></pre>
+              </section>
+
+              <section>
+                <span class="inspector-label">Drops</span>
+                <form id="drop-form" class="stack-form">
+                  <input id="drop-name" type="text" placeholder="Drop name" />
+                  <input id="drop-password" type="password" autocomplete="new-password" placeholder="Drop password" />
+                  <button type="submit">Create drop</button>
+                  <button id="copy-drop-link-button" type="button">Copy drop link</button>
+                </form>
+                <section id="drop-management-panel" class="managed-links-panel" aria-label="Upload drops">
+                  <div class="section-line">
+                    <h3>Drops</h3>
+                    <button id="drop-management-refresh-button" type="button">Refresh</button>
+                  </div>
+                  <div id="drop-management-list" class="managed-link-list"></div>
+                  <form id="drop-update-form" class="stack-form">
+                    <select id="drop-update-select" aria-label="Drop to manage"></select>
+                    <input id="drop-update-name" type="text" placeholder="Drop name" />
+                    <input id="drop-update-password" type="password" autocomplete="new-password" placeholder="New drop password" />
+                    <select id="drop-update-expiry" aria-label="Drop link expiry">
+                      <option value="3600">1 hour</option>
+                      <option value="86400">24 hours</option>
+                      <option value="604800" selected>7 days</option>
+                      <option value="2592000">30 days</option>
+                    </select>
+                    <div class="button-grid">
+                      <button id="drop-update-button" type="submit">Update drop</button>
+                      <button id="drop-open-inbox-button" type="button">Open inbox</button>
+                      <button id="drop-revoke-button" type="button">Revoke drop</button>
+                    </div>
+                  </form>
+                </section>
+              </section>
+
+              <section>
+                <span class="inspector-label">Templates</span>
+                <div id="template-list" class="template-list"></div>
+                <form id="template-form" class="stack-form">
+                  <input id="template-name" type="text" placeholder="Template name" />
+                  <input id="template-description" type="text" placeholder="Description" />
+                  <textarea id="template-items" rows="4" placeholder='[{"path":"Docs","kind":"folder"},{"path":"Docs/README.md","kind":"file","content":"notes"}]'></textarea>
+                  <button type="submit">Create template</button>
+                </form>
+                <div class="revision-controls">
+                  <select id="template-select" aria-label="Template"></select>
+                  <input id="template-root-name" type="text" placeholder="Root folder name" />
+                  <button id="apply-template-button" type="button">Apply template</button>
+                </div>
+                <pre id="template-output" class="operation-output"></pre>
+              </section>
+
+              <section id="sync-panel">
+                <div class="section-line">
+                  <span class="inspector-label">Sync</span>
+                  <button id="sync-refresh-button" type="button">Refresh</button>
+                </div>
+                <div id="sync-metrics" class="metric-grid"></div>
+                <div class="revision-controls">
+                  <input id="sync-cursor-input" type="number" min="0" value="0" aria-label="Sync cursor" />
+                  <button id="sync-changes-button" type="button">Changes</button>
+                  <button id="sync-conflicts-button" type="button">Conflicts</button>
+                </div>
+                <div id="sync-change-list" class="sync-change-list"></div>
+                <pre id="sync-output" class="operation-output"></pre>
+              </section>
+
+              <section id="import-export-panel">
+                <span class="inspector-label">Import export</span>
+                <textarea id="import-bundle" rows="5" placeholder='{"entries":[{"path":"notes.txt","kind":"file","content":"hello"}]}'></textarea>
+                <div class="button-grid">
+                  <button id="import-preview-button" type="button">Preview</button>
+                  <button id="import-bundle-button" type="button">Import</button>
+                  <button id="export-bundle-button" type="button">Export</button>
+                </div>
+                <pre id="import-export-output" class="operation-output"></pre>
+              </section>
+            </div>
+          </section>
+
+          <section id="admin-command-center" class="admin-command-center advanced-section active" data-advanced-panel="admin" aria-label="Admin center">
+            <div class="admin-head">
+              <div class="admin-head-copy">
+                <h2>Admin center</h2>
+                <p>Manage server workspaces, teams, accounts, backups, security, and Drive health.</p>
+              </div>
+              <button id="admin-refresh-button" type="button" class="secondary-action">
+                <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                Refresh
+              </button>
+            </div>
+            <div class="admin-status-strip" id="admin-status-strip">
+              <div class="admin-status-chip">
+                <span class="admin-status-key">Drive service</span>
+                <span class="admin-status-val" id="admin-status-server">Checking…</span>
+                <small>Can this browser reach Drive?</small>
+              </div>
+              <div class="admin-status-chip">
+                <span class="admin-status-key">Drive data</span>
+                <span class="admin-status-val" id="admin-readiness-status">Not checked</span>
+                <small>Are the database and file store ready?</small>
+              </div>
+              <div class="admin-status-chip">
+                <span class="admin-status-key">Host profile</span>
+                <span class="admin-status-val" id="admin-status-sandbox">Not checked</span>
+                <small>Saved deployment draft, not a live host test.</small>
+              </div>
+              <div class="admin-status-chip">
+                <span class="admin-status-key">System checks</span>
+                <span class="admin-status-val" id="admin-status-maintenance">Not checked</span>
+                <small>Drive reports only what it actually inspects.</small>
+              </div>
+            </div>
+            <div class="admin-command-layout">
+              <label class="admin-section-picker">
+                <span>Admin section</span>
+                <select id="admin-section-select">
+                  <option value="overview">Overview</option>
+                  <option value="workspaces">Workspaces</option>
+                  <option value="content">Content</option>
+                  <option value="teams">Teams</option>
+                  <option value="sharing">Sharing</option>
+                  <option value="backups">Backups</option>
+                  <option value="sessions">Sessions</option>
+                  <option value="accounts">Accounts</option>
+                  <option value="security">Security activity</option>
+                  <option value="email">Email</option>
+                  <option value="sandbox">Host profile</option>
+                  <option value="maintenance">Health &amp; support</option>
+                </select>
+              </label>
+              <nav class="admin-section-rail" aria-label="Admin sections">
+                <button type="button" class="active" data-admin-section="overview">Overview</button>
+                <button type="button" data-admin-section="workspaces">Workspaces</button>
+                <button type="button" data-admin-section="content">Content</button>
+                <button type="button" data-admin-section="teams">Teams</button>
+                <button type="button" data-admin-section="sharing">Sharing</button>
+                <button type="button" data-admin-section="backups">Backups</button>
+                <button type="button" data-admin-section="sessions">Sessions</button>
+                <button type="button" data-admin-section="accounts">Accounts</button>
+                <button type="button" data-admin-section="security">Security activity</button>
+                <button type="button" data-admin-section="email">Email</button>
+                <button type="button" data-admin-section="sandbox">Host profile</button>
+                <button type="button" data-admin-section="maintenance">Health &amp; support</button>
+              </nav>
+
+              <div class="admin-work-surface">
+                <section class="admin-section active" data-admin-panel="overview">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg> Overview</span>
+                        <h3>Server at a glance</h3>
+                        <p>Everything this ShellX Drive server is currently holding.</p>
+                      </div>
+                    </div>
+                    <div id="admin-metrics" class="admin-stat-grid"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> Activity</span>
+                        <h3>Recent activity</h3>
+                        <p>Recent server actions in plain language. Repeated records are grouped together.</p>
+                      </div>
+                    </div>
+                    <div class="admin-filter-bar">
+                      <label>
+                        <span>Search activity</span>
+                        <input id="admin-activity-search" type="search" placeholder="Action or account" autocomplete="off" />
+                      </label>
+                      <label>
+                        <span>Activity type</span>
+                        <select id="admin-activity-filter">
+                          <option value="all">All activity</option>
+                          <option value="access">Accounts &amp; sessions</option>
+                          <option value="files">Files &amp; workspaces</option>
+                          <option value="sharing">Guest sharing</option>
+                          <option value="backups">Backups</option>
+                          <option value="host">Host operations</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="admin-output" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="workspaces">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg> Workspaces</span>
+                        <h3>Server workspaces</h3>
+                        <p>Create workspaces and remove only empty archived test spaces.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-workspace-refresh" type="button">Refresh</button>
+                      </div>
+                    </div>
+                    <div id="admin-workspace-list" class="admin-live-list"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div id="admin-workspace-create-slot"></div>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="content">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg> Canonical content</span>
+                        <h3>Ownership tree</h3>
+                        <p>Each item appears once under its owner. Access details load only when requested.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-canonical-refresh-button" type="button">Refresh</button>
+                      </div>
+                    </div>
+                    <label class="admin-canonical-search-label" for="admin-canonical-search">
+                      <span>Find by item name</span>
+                      <input id="admin-canonical-search" type="search" autocomplete="off" placeholder="Search canonical item name" />
+                    </label>
+                    <div id="admin-canonical-inventory" class="admin-canonical-inventory" aria-live="polite"></div>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="teams">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg> People</span>
+                        <h3>Teams</h3>
+                        <p>Group people together, then grant a team access to a workspace.</p>
+                      </div>
+                    </div>
+                    <div id="admin-teams-summary" class="admin-stat-grid"></div>
+                    <div id="groups-output" class="admin-live-list"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Create a team</h3>
+                        <p>New teams start empty — add members below.</p>
+                      </div>
+                    </div>
+                    <form id="group-form" class="admin-form-grid">
+                      <label>
+                        <span>Team name</span>
+                        <input id="group-name" type="text" placeholder="Engineering" />
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="group-create-button" type="submit" class="primary-action">Create team</button>
+                      </div>
+                    </form>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Members &amp; access</h3>
+                        <p>Add a person to a team, or grant a team access to the current workspace.</p>
+                      </div>
+                    </div>
+                    <form id="group-member-form" class="admin-form-grid">
+                      <label>
+                        <span>Team</span>
+                        <select id="group-member-select" aria-label="Team for member"></select>
+                      </label>
+                      <label>
+                        <span>Member email</span>
+                        <input id="group-member-email" type="email" autocomplete="off" placeholder="person@example.com" />
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="group-member-add-button" type="submit">Add member</button>
+                      </div>
+                    </form>
+                    <form id="group-grant-form" class="admin-form-grid">
+                      <label>
+                        <span>Team</span>
+                        <select id="group-grant-select" aria-label="Team for workspace grant"></select>
+                      </label>
+                      <label>
+                        <span>Workspace role</span>
+                        <select id="group-grant-role" aria-label="Workspace group role">
+                          <option value="viewer">Can view</option>
+                          <option value="editor">Can edit</option>
+                        </select>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="group-grant-button" type="submit">Grant current workspace</button>
+                        <button id="group-revoke-button" type="button">Revoke grant</button>
+                      </div>
+                    </form>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="storage">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg> Storage</span>
+                        <h3>Storage usage</h3>
+                        <p>File storage, versions, and the separate bounded metadata and collaboration allocation.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="storage-policy-refresh-button" type="button">Refresh usage</button>
+                      </div>
+                    </div>
+                    <div id="admin-storage-summary" class="admin-stat-grid"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Quota &amp; retention</h3>
+                        <p>Set a size limit and how long trashed files and old versions are kept.</p>
+                      </div>
+                    </div>
+                    <form id="storage-policy-form" class="admin-form-grid">
+                      <label>
+                        <span>Storage limit (GB)</span>
+                        <input id="policy-quota-bytes" type="number" min="0" step="0.1" placeholder="No limit" />
+                      </label>
+                      <label>
+                        <span>Keep trash for (days)</span>
+                        <input id="policy-trash-retention-days" type="number" min="0" />
+                      </label>
+                      <label>
+                        <span>Keep versions for (days)</span>
+                        <input id="policy-revision-retention-days" type="number" min="0" />
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="storage-policy-save-button" type="submit" class="primary-action">Save storage policy</button>
+                      </div>
+                    </form>
+                    <div id="storage-policy-output" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="sharing">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-share"/></svg> Sharing</span>
+                        <h3>Sharing defaults</h3>
+                        <p>The rules new share links and upload drops start with.</p>
+                      </div>
+                    </div>
+                    <div id="admin-sharing-summary" class="admin-stat-grid"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Link &amp; drop policy</h3>
+                        <p>Control whether links are public, require passwords, and how long they last.</p>
+                      </div>
+                    </div>
+                    <form id="sharing-policy-form" class="admin-form-grid">
+                    <label>
+                      <span>Public links</span>
+                      <select id="policy-public-links-enabled">
+                        <option value="true">Allowed</option>
+                        <option value="false">Blocked</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Share passwords</span>
+                      <select id="policy-link-password-required">
+                        <option value="true">Required</option>
+                        <option value="false">Optional</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Permanent links</span>
+                      <select id="policy-allow-never-expire">
+                        <option value="false">Blocked</option>
+                        <option value="true">Allowed</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Longest share lifetime</span>
+                      <select id="policy-max-link-ttl-seconds">
+                        <option value="86400">24 hours</option>
+                        <option value="604800">7 days</option>
+                        <option value="2592000">30 days</option>
+                        <option value="7776000">90 days</option>
+                        <option value="31536000">1 year</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Drop passwords</span>
+                      <select id="policy-drop-password-required">
+                        <option value="true">Required</option>
+                        <option value="false">Optional</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Longest drop lifetime</span>
+                      <select id="policy-max-drop-ttl-seconds">
+                        <option value="86400">24 hours</option>
+                        <option value="604800">7 days</option>
+                        <option value="2592000">30 days</option>
+                        <option value="7776000">90 days</option>
+                        <option value="31536000">1 year</option>
+                      </select>
+                    </label>
+                    <div class="admin-form-actions">
+                      <button id="sharing-policy-save-button" type="submit" class="primary-action">Save sharing defaults</button>
+                    </div>
+                    </form>
+                    <div id="sharing-policy-output" class="admin-live-list"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Everyone access</h3>
+                        <p>Allow owners to grant an item to every signed-in Drive account. This is separate from public guest links.</p>
+                      </div>
+                    </div>
+                    <form id="admin-everyone-grant-policy-form" class="admin-form-grid">
+                      <label>
+                        <span>New everyone access</span>
+                        <select id="admin-everyone-grant-policy-enabled">
+                          <option value="false">Blocked</option>
+                          <option value="true">Allowed</option>
+                        </select>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button type="submit" class="primary-action">Save everyone access policy</button>
+                      </div>
+                    </form>
+                    <div id="admin-everyone-grant-policy-output" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="backups">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg> Backups</span>
+                        <h3>Server backups</h3>
+                        <p>Point-in-time recovery archives for this complete Drive server.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-backup-create-button" type="button" class="primary-action">Create server backup</button>
+                        <button id="admin-backups-refresh-button" type="button">Refresh</button>
+                      </div>
+                    </div>
+                    <div class="admin-callout" data-tone="warning">
+                      <strong>What a backup contains</strong>
+                      <p>Each archive contains the server database and stored file content for every workspace. It is operator-readable and remains on this host until you download or copy it elsewhere. Drive does not track whether an off-host copy exists.</p>
+                    </div>
+                    <div id="admin-backups-summary" class="admin-stat-grid"></div>
+                    <div id="admin-backups-list" class="admin-live-list"></div>
+                    <div class="admin-form-actions">
+                      <button id="admin-backups-previous" type="button" disabled>Newer backups</button>
+                      <span id="admin-backups-page" role="status">Page 1</span>
+                      <button id="admin-backups-next" type="button" disabled>Older backups</button>
+                    </div>
+                    <p id="admin-backup-selection" role="status">Selected backup: none</p>
+                    <div class="admin-form-actions">
+                      <button id="admin-backup-validate-button" type="button">Check selected backup</button>
+                      <button id="admin-backup-download-button" type="button">Download a copy</button>
+                      <button id="admin-backup-restore-button" type="button" class="danger-action">Restore whole server</button>
+                      <button id="admin-backup-delete-button" type="button" class="danger-action">Delete backup</button>
+                    </div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Automatic backups</h3>
+                        <p>Enable a schedule, choose its frequency, and set how many completed archives remain on this server.</p>
+                      </div>
+                    </div>
+                    <form id="admin-backup-policy-form" class="admin-form-grid backup-policy-grid">
+                      <label>
+                        <span>Frequency when enabled</span>
+                        <select id="admin-backup-policy-schedule">
+                          <option value="manual">Manually</option>
+                          <option value="hourly">Every hour</option>
+                          <option value="daily">Every day</option>
+                          <option value="weekly">Every week</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Newest backups to keep</span>
+                        <input id="admin-backup-policy-retention" type="number" min="1" value="7" />
+                      </label>
+                      <label class="inline-check">
+                        <input id="admin-backup-policy-enabled" type="checkbox" />
+                        <span>Enable automatic backups</span>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="admin-backup-policy-save-button" type="submit">Save backup schedule</button>
+                        <button id="admin-backup-policy-refresh-button" type="button">Refresh</button>
+                      </div>
+                    </form>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="sessions">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> Sessions</span>
+                        <h3>Signed-in browsers</h3>
+                        <p>All active browser sessions on this server, including the browser, IP address, sign-in time, last-seen time, and a revocation-safe reference.</p>
+                      </div>
+                    </div>
+                    <div class="admin-filter-bar single-filter">
+                      <label>
+                        <span>Search sessions</span>
+                        <input id="admin-sessions-search" type="search" placeholder="Account, browser, IP, or reference" autocomplete="off" />
+                      </label>
+                    </div>
+                    <div id="admin-sessions-summary" class="admin-live-list"></div>
+                    <div class="admin-form-actions" aria-label="Session pages">
+                      <span id="admin-sessions-page-status" class="settings-hint" aria-live="polite"></span>
+                      <button data-admin-sessions-previous type="button">Previous</button>
+                      <button data-admin-sessions-next type="button">Next</button>
+                    </div>
+                  </article>
+                </section>
+                <section id="admin-accounts-panel" class="admin-section" data-admin-panel="accounts">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-user"/></svg> Accounts</span>
+                        <h3>User accounts</h3>
+                        <p>Everyone who can sign in to this server. Select an account to manage it.</p>
+                      </div>
+                    </div>
+                    <div class="admin-filter-bar">
+                      <label>
+                        <span>Search accounts</span>
+                        <input id="admin-accounts-search" type="search" placeholder="Email address" autocomplete="off" />
+                      </label>
+                      <label>
+                        <span>Account type</span>
+                        <select id="admin-accounts-filter">
+                          <option value="all">All accounts</option>
+                          <option value="active">Active</option>
+                          <option value="disabled">Disabled</option>
+                          <option value="admin">Server admins</option>
+                          <option value="2fa">2FA enabled</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="admin-auth-summary" class="admin-live-list"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Add an account</h3>
+                        <p>Create a new user with a temporary password they can change later.</p>
+                      </div>
+                    </div>
+                    <form id="auth-account-form" class="admin-form-grid">
+                    <label>
+                      <span>Email</span>
+                      <input id="auth-user-email" type="email" autocomplete="username" placeholder="person@example.com" />
+                    </label>
+                    <label>
+                      <span>Password</span>
+                      <input id="auth-user-password" type="password" autocomplete="new-password" placeholder="Temporary password" />
+                    </label>
+                    <label class="inline-check">
+                      <input id="auth-user-admin" type="checkbox" />
+                      <span>Admin</span>
+                    </label>
+                    <div class="admin-form-actions">
+                      <button id="auth-user-create-button" type="submit" class="primary-action">Create account</button>
+                    </div>
+                    </form>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Manage an account</h3>
+                        <p>Manage access, or create a short-lived recovery link when email is unavailable.</p>
+                      </div>
+                    </div>
+                    <form id="admin-auth-update-form" class="admin-form-grid">
+                      <label>
+                        <span>Account</span>
+                        <select id="admin-auth-update-email"></select>
+                      </label>
+                      <label>
+                        <span>Reset password</span>
+                        <input id="admin-auth-reset-password" type="password" autocomplete="new-password" placeholder="Temporary password" />
+                      </label>
+                      <label class="inline-check">
+                        <input id="admin-auth-disabled" type="checkbox" />
+                        <span>Disabled</span>
+                      </label>
+                      <label class="inline-check">
+                        <input id="admin-auth-admin" type="checkbox" />
+                        <span>Admin</span>
+                      </label>
+                      <label class="inline-check">
+                        <input id="admin-auth-reset-2fa" type="checkbox" />
+                        <span>Reset two-factor</span>
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="admin-auth-update-button" type="submit">Save account</button>
+                        <button id="admin-auth-revoke-sessions-button" type="button">Sign out everywhere</button>
+                      </div>
+                    </form>
+                    <div id="admin-auth-output" class="admin-live-list"></div>
+                    <section class="admin-form-grid" aria-labelledby="admin-auth-recovery-title">
+                      <div>
+                        <h4 id="admin-auth-recovery-title">Password recovery link</h4>
+                        <p class="settings-hint">For the selected account only. The one-time link expires in one hour, replaces any earlier reset link, and is never emailed by this build.</p>
+                      </div>
+                      <div class="admin-form-actions">
+                        <button id="admin-auth-create-reset-link" type="button">Create recovery link</button>
+                        <button id="admin-auth-revoke-reset-link" type="button">Revoke recovery link</button>
+                      </div>
+                      <div id="admin-auth-reset-link-output" class="admin-live-list" aria-live="polite"></div>
+                    </section>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Self-registration</h3>
+                        <p>Public signup is unavailable in v0.1 until verified-email enrollment is implemented. Create accounts here as an administrator, then add them to a workspace.</p>
+                      </div>
+                    </div>
+                    <div id="admin-registration-summary" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section id="admin-sign-in-security-panel" class="admin-section" data-admin-panel="security">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg> Server security</span>
+                        <h3>Security activity</h3>
+                        <p>Successful and failed sign-ins, guest-link access, rejected requests, file access, and authenticated server commands.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-security-events-refresh" type="button">Refresh log</button>
+                      </div>
+                    </div>
+                    <div class="admin-callout">
+                      <strong>Admin-only security data</strong>
+                      <p id="admin-security-events-policy">Loading retention and privacy policy…</p>
+                    </div>
+                    <div class="admin-filter-bar admin-security-filters">
+                      <label>
+                        <span>Search security activity</span>
+                        <input id="admin-security-events-search" type="search" placeholder="Account, IP, browser, page, or item" autocomplete="off" />
+                      </label>
+                      <label>
+                        <span>Activity type</span>
+                        <select id="admin-security-events-category">
+                          <option value="all">All activity</option>
+                          <option value="login">Sign-ins</option>
+                          <option value="access">Authenticated access</option>
+                          <option value="guest_access">Guest-link access</option>
+                          <option value="command">Server commands</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Outcome</span>
+                        <select id="admin-security-events-outcome">
+                          <option value="all">All outcomes</option>
+                          <option value="success">Allowed</option>
+                          <option value="challenge">2FA requested</option>
+                          <option value="denied">Denied</option>
+                          <option value="blocked">Temporarily blocked</option>
+                          <option value="rejected">Rejected</option>
+                          <option value="failed">Server failure</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="admin-security-events-list" class="admin-live-list"></div>
+                    <div class="admin-form-actions">
+                      <button id="admin-security-events-more" type="button">Load older</button>
+                    </div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Sign-in protection</h3>
+                        <p>Temporary blocks and failed-attempt counters for account sign-ins, 2FA, password changes, and protected guest links.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-auth-attempts-button" type="button">Refresh attempts</button>
+                      </div>
+                    </div>
+                    <div class="admin-callout">
+                      <strong>How this works</strong>
+                      <p>Repeated failures can temporarily block an account or protected guest link for one browser or app. Drive stores a privacy-safe reference instead of another copy of its IP address. Remove a block only when you know the attempts are legitimate.</p>
+                    </div>
+                    <div class="admin-filter-bar">
+                      <label>
+                        <span>Search protection entries</span>
+                        <input id="admin-auth-attempts-search" type="search" placeholder="Account, sign-in step, browser, or app" autocomplete="off" />
+                      </label>
+                      <label>
+                        <span>Protection state</span>
+                        <select id="admin-auth-attempts-filter">
+                          <option value="all">All entries</option>
+                          <option value="locked">Temporarily blocked</option>
+                          <option value="counters">Counters not blocked</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div id="admin-auth-attempts" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section id="admin-email-panel" class="admin-section" data-admin-panel="email">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg> Email</span>
+                        <h3>Outgoing messages</h3>
+                        <p>Invitations and notifications waiting on this server. This version stores them for administrator delivery and does not send email automatically.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-email-run-button" type="button" class="primary-action">Process waiting messages</button>
+                        <button id="admin-email-refresh-button" type="button">Refresh</button>
+                      </div>
+                    </div>
+                    <div id="admin-email-summary" class="admin-stat-grid"></div>
+                    <div id="admin-email-list" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section id="admin-sandbox-panel" class="admin-section" data-admin-panel="sandbox">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg> Host deployment</span>
+                        <h3>Service-isolation draft</h3>
+                        <p>A saved proposal for the systemd service configuration used by a host operator.</p>
+                      </div>
+                    </div>
+                    <div class="admin-callout" data-tone="warning">
+                      <strong>This is not live sandbox status</strong>
+                      <p>Drive can save a draft and generate commands, but this page does not inspect or change the running systemd unit. “Record reviewed plan” creates an audit record only. A host operator must apply and verify the service configuration outside Drive.</p>
+                    </div>
+                    <div id="sandbox-output" class="admin-live-list"></div>
+                    <details class="admin-disclosure">
+                      <summary>Edit draft and preview host commands</summary>
+                      <form id="sandbox-form" class="admin-form-grid">
+                      <label>
+                        <span>Mode</span>
+                        <select id="sandbox-mode">
+                          <option value="strict">Strict VPS</option>
+                          <option value="local-dev">Local dev</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Bind address</span>
+                        <input id="sandbox-bind" type="text" placeholder="127.0.0.1:5758" />
+                      </label>
+                      <label>
+                        <span>Data directory</span>
+                        <input id="sandbox-data-dir" type="text" placeholder="/var/lib/shellx-drive" />
+                      </label>
+                      <label>
+                        <span>Writable paths</span>
+                        <input id="sandbox-write-paths" type="text" placeholder="/var/lib/shellx-drive" />
+                      </label>
+                      <div class="admin-form-actions">
+                        <button id="sandbox-save-button" type="submit" class="primary-action">Save draft</button>
+                        <button id="sandbox-preview-button" type="button">Preview host commands</button>
+                        <button id="sandbox-apply-intent-button" type="button">Record reviewed plan</button>
+                      </div>
+                      </form>
+                    </details>
+                  </article>
+                </section>
+                <section class="admin-section" data-admin-panel="cleanup">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-trash"/></svg> Cleanup</span>
+                        <h3>Reclaim space</h3>
+                        <p>Permanently remove trashed files and old versions past their retention window.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="retention-preview-button" type="button">Preview</button>
+                        <button id="retention-apply-button" type="button">Apply cleanup</button>
+                      </div>
+                    </div>
+                    <div id="retention-output" class="admin-live-list"></div>
+                  </article>
+                </section>
+                <section id="admin-maintenance-panel" class="admin-section" data-admin-panel="maintenance">
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <span class="admin-card-eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg> Health</span>
+                        <h3>Drive readiness</h3>
+                        <p>Live application checks for request handling, the database, and stored files.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="admin-readiness-refresh-button" type="button">Refresh</button>
+                      </div>
+                    </div>
+                    <div id="admin-readiness-summary" class="admin-live-list"></div>
+                  </article>
+                  <article class="admin-card">
+                    <div class="admin-card-head">
+                      <div class="admin-card-title">
+                        <h3>Support information</h3>
+                        <p>Review Drive health or create a privacy-filtered support bundle. Drive does not inspect operating-system updates.</p>
+                      </div>
+                      <div class="admin-card-actions">
+                        <button id="maintenance-refresh-button" type="button">Refresh status</button>
+                      </div>
+                    </div>
+                    <div id="admin-maintenance-summary" class="admin-live-list"></div>
+                    <div class="admin-form-actions">
+                      <button id="admin-support-bundle-button" type="button">Create support bundle</button>
+                    </div>
+                    <div id="maintenance-output" class="admin-live-list"></div>
+                  </article>
+                </section>
+              </div>
+            </div>
+          </section>
+
+          <section id="admin-panel" hidden aria-hidden="true"></section>
+
+          <section id="debug-panel" class="advanced-section" data-advanced-panel="debug">
+            <span class="inspector-label">Diagnostics</span>
+            <p class="debug-note">Read-only service checks for operators. Not part of the normal file workflow.</p>
+            <div class="debug-grid">
+              <button id="debug-state-button" type="button" data-debug-path="/debug/state">State</button>
+              <button id="debug-receipts-button" type="button" data-debug-path="/debug/receipts">Receipts</button>
+              <button id="debug-comments-button" type="button" data-debug-path="/debug/comments">Comments</button>
+              <button id="debug-templates-button" type="button" data-debug-path="/debug/folder-templates">Templates</button>
+              <button id="debug-groups-button" type="button" data-debug-path="/debug/groups">Groups</button>
+              <button id="debug-invitations-button" type="button" data-debug-path="/debug/invitations">Invitations</button>
+              <button id="debug-shares-button" type="button" data-debug-path="/debug/shares">Shares</button>
+              <button id="debug-drops-button" type="button" data-debug-path="/debug/drops">Drops</button>
+              <button id="debug-file-tree-button" type="button" data-debug-path="/debug/file-tree">File tree</button>
+              <button id="debug-uploads-button" type="button" data-debug-path="/debug/uploads">Uploads</button>
+              <button id="debug-downloads-button" type="button" data-debug-path="/debug/downloads">Downloads</button>
+              <button id="debug-browse-button" type="button" data-debug-path="/debug/browse">Browse scale</button>
+              <button id="debug-sync-changes-button" type="button" data-debug-path="/debug/sync/changes">Sync changes</button>
+              <button id="debug-usage-button" type="button" data-debug-path="/debug/usage">Usage</button>
+              <button id="debug-policies-button" type="button" data-debug-path="/debug/policies">Policies</button>
+              <button id="debug-jobs-button" type="button" data-debug-path="/debug/jobs">Jobs</button>
+              <button id="debug-run-jobs-button" type="button">Run jobs</button>
+              <button id="debug-email-button" type="button" data-debug-path="/debug/email">Email</button>
+              <button id="debug-run-email-button" type="button" data-debug-path="/debug/email/run" data-debug-method="POST">Run email</button>
+              <button id="debug-notifications-button" type="button" data-debug-path="/debug/notifications">Notifications</button>
+              <button id="debug-office-sessions-button" type="button" data-debug-path="/debug/office-sessions">Office sessions</button>
+              <button id="debug-preview-button" type="button">Preview</button>
+              <button id="debug-mobile-sync-button" type="button" data-debug-path="/debug/mobile-sync">Mobile sync</button>
+              <button id="debug-twin-scenarios-button" type="button" data-debug-path="/debug/twin/scenarios">Service tests</button>
+              <button id="debug-support-bundle-button" type="button" data-debug-path="/debug/support-bundle">Support bundle</button>
+              <button id="debug-export-button" type="button" data-debug-path="/debug/export">Export</button>
+              <button type="button" data-debug-path="/debug/activity">Activity</button>
+              <button type="button" data-debug-path="/debug/workspaces">Workspaces</button>
+              <button type="button" data-debug-path="/debug/app-tokens">App tokens</button>
+              <button type="button" data-debug-path="/debug/sync/conflicts">Sync conflicts</button>
+              <button type="button" data-debug-path="/debug/imports">Imports</button>
+              <button type="button" data-debug-path="/debug/webdav">WebDAV</button>
+              <button type="button" data-debug-path="/debug/storage-integrity">Storage integrity</button>
+              <button type="button" data-debug-path="/debug/capabilities">Capabilities</button>
+              <button type="button" data-client-debug-snapshot>Browser snapshot</button>
+              <button id="seed-button" type="button">Seed</button>
+              <button id="reset-button" type="button">Reset</button>
+            </div>
+            <div class="revision-controls">
+              <input id="debug-twin-scenario" type="text" value="workspace_roundtrip" />
+              <label class="inline-check">
+                <input id="debug-twin-fault" type="checkbox" />
+                <span>Inject scenario fault</span>
+              </label>
+              <button id="debug-twin-run-button" type="button">Run service test</button>
+            </div>
+            <pre id="debug-output" class="operation-output"></pre>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- Persistent floating upload-progress card (issue #1): visible whenever
+         there are queued/active/settled uploads, regardless of whether the
+         quick-create panel is open. Drag-drop uploads onto the main drive show
+         their progress here. -->
+    <section id="upload-status-panel" class="upload-status-panel" hidden aria-label="Upload progress">
+      <div class="upload-status-head">
+        <strong id="upload-status-title" role="status" aria-live="polite" aria-atomic="true">Uploading files…</strong>
+        <div class="upload-status-actions">
+          <button id="upload-status-clear-completed" type="button">Clear completed</button>
+          <button id="upload-status-dismiss" class="icon-button" type="button" aria-label="Dismiss uploads" title="Dismiss uploads">
+            <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="upload-aggregate upload-status-aggregate" data-upload-aggregate hidden>
+        <div class="upload-aggregate-copy">
+          <span>Overall progress</span>
+          <strong data-upload-aggregate-value>0 B of 0 B · 0%</strong>
+        </div>
+        <span class="upload-progress-track" data-upload-aggregate-track role="progressbar" aria-label="Overall upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0 B of 0 B, 0%">
+          <span class="upload-progress-bar" data-upload-aggregate-bar></span>
+        </span>
+      </div>
+      <div id="upload-status-list" class="upload-status-list"></div>
+    </section>
+
+    <!-- Administrator-only banner shown when the running server build differs
+         from the build this administrator tab loaded. -->
+    <div id="update-banner" class="update-banner" hidden role="status" aria-live="polite">
+      <svg class="icon update-banner-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+      <div class="update-banner-copy">
+        <strong>New version of ShellX Drive available</strong>
+        <span id="update-banner-detail" class="update-banner-detail"></span>
+      </div>
+      <button id="update-banner-reload" class="update-banner-reload" type="button">Reload</button>
+      <button id="update-banner-dismiss" class="icon-button" type="button" aria-label="Dismiss update notice" title="Dismiss">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
+      </button>
+    </div>
+
+    <div id="status-toast" class="status-toast" role="status" aria-live="polite"></div>
+    <script src="/assets/admin-backups.js?v=2026-09-23-admin-history1"></script>
+    <script src="/assets/download-tickets.js?v=2026-08-26-auth-epoch1"></script>
+    <script src="/assets/upload-progress.js?v=2026-07-18-collab1"></script>
+    <script src="/assets/drive-uploads.js?v=2026-08-25-account-separation2"></script>
+    <script src="/assets/drive-file-moves.js?v=2026-10-02-shared-scope2"></script>
+    <script src="/assets/drive-browser.js?v=2026-08-25-account-separation2"></script>
+    <script src="/assets/drive-preview.js?v=2026-08-26-preview-bound1"></script>
+    <script src="/assets/drive-agent-delegations.js?v=2026-09-24-delegation-pages1"></script>
+    <script src="/assets/drive-agent-access.js?v=2026-10-05-cold-click1"></script>
+    <script src="/assets/drive-invitation-link.js?v=2026-09-02-invitation-link-v1"></script>
+    <script src="/assets/drive-workspace-invitations.js?v=2026-09-07-invitation-link-copy1"></script>
+    <script src="/assets/drive-human-sharing-contract.js?v=2026-10-02-shared-scope1"></script>
+    <script src="/assets/drive-human-sharing-drawer.js?v=2026-09-02-human-sharing-v2"></script>
+    <script src="/assets/drive-everyone-grant-policy.js?v=2026-09-02-everyone-policy-v1"></script>
+    <script src="/assets/drive-human-sharing-admin.js?v=2026-09-03-admin-item-v1"></script>
+    <script src="/assets/drive-human-sharing-browser.js?v=2026-10-02-shared-scope1"></script>
+    <script src="/assets/drive-human-sharing-pages.js?v=2026-09-23-browse-pages1"></script>
+    <script src="/assets/drive-human-sharing.js?v=2026-10-02-shared-scope1"></script>
+    <script src="/assets/drive-guest-links.js?v=2026-10-05-cold-click1"></script>
+    <script src="/assets/drive-collaboration.js?v=2026-10-05-cold-click1"></script>
+    <script src="/assets/drive-debug.js?v=2026-07-18-debug1"></script>
+    <script src="/assets/drive-format.js?v=2026-07-18-modular1"></script>
+    <script src="/assets/drive-file-types.js?v=2026-09-07-office-formats1"></script>
+    <script src="/assets/drive-settings.js?v=2026-07-22-password1"></script>
+    <script src="/assets/drive-sessions.js?v=2026-08-28-session-retention1"></script>
+    <script src="/assets/drive-workspace-policy.js?v=2026-08-26-policy-lease1"></script>
+    <script src="/assets/admin-clarity.js?v=2026-08-25-securitylog1"></script>
+    <script src="/assets/admin-password-reset.js?v=2026-09-02-manual-recovery1"></script>
+    <script src="/assets/admin-security.js?v=2026-09-23-admin-history1"></script>
+    <script src="/assets/drive-account.js?v=2026-08-25-account-separation2"></script>
+    <script src="/assets/drive-account-state.js?v=2026-08-26-security-fix1"></script>
+    <script src="/assets/drive-mobile-sync.js?v=2026-10-05-cold-click1"></script>
+    <script src="/assets/drive-auth-lifecycle.js?v=2026-08-26-auth-epoch1"></script>
+    <script src="/assets/drive-auth-hydration.js?v=2026-08-26-auth-epoch1"></script>
+    <script src="/assets/drive-api.js?v=2026-08-26-auth-epoch1"></script>
+    <script src="/assets/drive-version.js?v=2026-08-13-modular1"></script>
+    <script src="/assets/drive.js?v=2026-10-05-cold-click1"></script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+# Reassessed 2026-10-08 against the locked desktop-shell graph and RustSec/OSV.
+# Only these seven active advisories have expiring, advisory-specific dispositions.
+# New advisories remain unfiltered. A passing scan is not release qualification.
+# The ten withdrawn GTK3 notices RUSTSEC-2024-0411..0420 need no ignore.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. proc-macro-error 1.0.4 enters the desktop-shell graph through Linux glib-macros 0.18.5 and gtk3-macros 0.18.2, both compile-time proc macros. Reassess before expiry or if the GTK macro graph changes."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2026-11-07
+reason = "The affected glib 0.18.5 is a local path patch with upstream PR 1343's &mut out-pointer correction; scripts/verify_glib_backport.py checks source provenance, lock resolution, and the exact patch. The five VariantStrIter iterator methods are exercised by focused tests; no unpatched registry glib is resolved. OSV matches version only and cannot recognize this backport. Reassess if source or resolution changes."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0075"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. unic-char-range 0.9.0 enters desktop-shell through tauri-utils 2.9.3 -> urlpattern 0.3.0 -> unic-ucd-ident 0.9.0. Reassess before expiry or on a Tauri graph change."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0080"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. unic-common 0.9.0 enters desktop-shell through tauri-utils 2.9.3 -> urlpattern 0.3.0 -> unic-ucd-ident 0.9.0 -> unic-ucd-version 0.9.0. Reassess before expiry or on a Tauri graph change."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0081"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. unic-char-property 0.9.0 enters desktop-shell through tauri-utils 2.9.3 -> urlpattern 0.3.0 -> unic-ucd-ident 0.9.0. Reassess before expiry or on a Tauri graph change."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0098"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. unic-ucd-version 0.9.0 enters desktop-shell through tauri-utils 2.9.3 -> urlpattern 0.3.0 -> unic-ucd-ident 0.9.0. Reassess before expiry or on a Tauri graph change."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0100"
+ignoreUntil = 2026-11-07
+reason = "RustSec INFO/unmaintained, no disclosed vulnerability or patched version. unic-ucd-ident 0.9.0 enters desktop-shell through tauri-utils 2.9.3 -> urlpattern 0.3.0. Reassess before expiry or on a Tauri graph change."

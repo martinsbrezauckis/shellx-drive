@@ -1,0 +1,9 @@
+ShellX Drive public export
+Selection policy: exact files named by scripts/public_export_allowlist.txt
+Payload scope: server source, public documentation, packaging and installer
+inputs, skill documentation, and desktop source for Linux, macOS, and Windows.
+Desktop build metadata preserves toolchain fields and omits private test aliases.
+
+This tree was generated from an empty staging directory using only the explicit
+selection above. It does not contain source Git history or source object
+identifiers, and does not claim an installed desktop release has been qualified.
