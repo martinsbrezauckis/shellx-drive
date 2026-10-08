@@ -16,7 +16,13 @@ mod tests;
 /// Resume a capability-authenticated Disconnect completion even after local
 /// cleanup removed the paired session and disabled normal device polling.
 pub(crate) fn resume_agent_disconnect_completion(app: &AppHandle) {
-    let runtime = app.state::<Runtime>();
+    let manager = app.state::<crate::application::ConnectionManager>();
+    for runtime in manager.all_runtimes() {
+        resume_for_runtime(app, runtime);
+    }
+}
+
+fn resume_for_runtime(app: &AppHandle, runtime: std::sync::Arc<Runtime>) {
     if runtime
         .coordinator
         .snapshot()
@@ -27,7 +33,6 @@ pub(crate) fn resume_agent_disconnect_completion(app: &AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let runtime = app.state::<Runtime>();
         let mut local_finalization_failures = 0;
         loop {
             match resume_pending_disconnect_completion(&runtime).await {

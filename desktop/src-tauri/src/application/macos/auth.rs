@@ -2,11 +2,12 @@
 
 use chrono::Utc;
 use serde::Serialize;
-use shellx_drive_desktop_core::{DriveHttpClient, LoginOutcome};
+use shellx_drive_desktop_core::{DisconnectRequest, DriveHttpClient, LoginOutcome};
 use tauri::State;
 
 use super::*;
 use crate::application::auth_publication::publish_second_factor;
+use crate::application::candidate_admission::ensure_candidate_admission;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,11 +19,16 @@ pub(super) struct LoginReply {
 #[tauri::command]
 pub(super) async fn login_password(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     server_url: String,
     email: String,
     password: String,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(macos_error)?;
@@ -32,9 +38,21 @@ pub(super) async fn login_password(
         .admit_login()
         .map_err(macos_error)?;
     *runtime.pending_login.lock().expect("pending login lock") = None;
+    candidate_recovery::require_login_identity(&runtime, client.normalized_url(), &email)
+        .map_err(macos_error)?;
+    runtime
+        .ensure_login_matches_retained_pair(client.normalized_url(), &email)
+        .map_err(macos_error)?;
+    // Keep this exact stop request through the server response and terminal
+    // publication so removal cannot discard late-session recovery ownership.
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(macos_error)?;
+    if !runtime.auth_offboarding.may_publish(generation) {
+        return Err("Sign-in was canceled; start sign-in again.".to_string());
+    }
+    ensure_candidate_admission(&runtime.coordinator.snapshot()).map_err(macos_error)?;
     let outcome = async {
-        candidate_recovery::require_login_identity(&runtime, client.normalized_url(), &email)?;
-        runtime.ensure_login_matches_retained_pair(client.normalized_url(), &email)?;
         Ok::<_, DesktopError>((
             client.clone(),
             client.login_password(&email, &password).await?,
@@ -45,6 +63,8 @@ pub(super) async fn login_password(
     finish_login(
         &app,
         &runtime,
+        &manager,
+        &mut stopped,
         outcome.0,
         outcome.1,
         Some(password),
@@ -56,12 +76,17 @@ pub(super) async fn login_password(
 #[tauri::command]
 pub(super) async fn continue_login(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     email: String,
     password: String,
     totp_code: Option<String>,
     recovery_code: Option<String>,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(macos_error)?;
@@ -80,9 +105,19 @@ pub(super) async fn continue_login(
         return Err("Sign-in was canceled; start sign-in again.".to_string());
     }
     let client = DriveHttpClient::new(&pending.server_url).map_err(macos_error)?;
+    candidate_recovery::require_login_identity(&runtime, client.normalized_url(), &email)
+        .map_err(macos_error)?;
+    runtime
+        .ensure_login_matches_retained_pair(client.normalized_url(), &email)
+        .map_err(macos_error)?;
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(macos_error)?;
+    if !runtime.auth_offboarding.may_publish(pending.generation) {
+        return Err("Sign-in was canceled; start sign-in again.".to_string());
+    }
+    ensure_candidate_admission(&runtime.coordinator.snapshot()).map_err(macos_error)?;
     let outcome = async {
-        candidate_recovery::require_login_identity(&runtime, client.normalized_url(), &email)?;
-        runtime.ensure_login_matches_retained_pair(client.normalized_url(), &email)?;
         Ok::<_, DesktopError>((
             client.clone(),
             client
@@ -100,6 +135,8 @@ pub(super) async fn continue_login(
     finish_login(
         &app,
         &runtime,
+        &manager,
+        &mut stopped,
         outcome.0,
         outcome.1,
         None,
@@ -111,6 +148,8 @@ pub(super) async fn continue_login(
 async fn finish_login(
     app: &tauri::AppHandle,
     runtime: &Runtime,
+    manager: &ConnectionManager,
+    stopped: &mut DisconnectRequest,
     client: DriveHttpClient,
     outcome: LoginOutcome,
     password_for_second_factor: Option<String>,
@@ -126,6 +165,8 @@ async fn finish_login(
         } => {
             candidate_recovery::publish_authenticated_session(
                 runtime,
+                manager,
+                stopped,
                 &client,
                 &bearer_token,
                 &account_email,

@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod device_credentials;
+
 impl DisconnectCleanupIntent {
     pub(crate) fn validate_shape(&self) -> Result<()> {
         if self.markers().count() > MAX_DISCONNECT_CLEANUP_MARKERS {
@@ -42,6 +44,7 @@ impl DisconnectCleanupIntent {
                 "disconnect cleanup credential slots must have exact account keys".to_string(),
             ));
         }
+        device_credentials::validate_scoped_slots(&self.credential_slots)?;
         Ok(())
     }
 }

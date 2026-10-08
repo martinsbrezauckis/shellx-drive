@@ -160,6 +160,12 @@ macro_rules! canonical_lifecycle {
                         delete_exact(PENDING_SERVICE, &slot.account_key)
                     }
                     DisconnectCredentialNamespace::DesktopAgentDevice => {
+                        Err(credential_error(
+                            "retained desktop-agent credential needs connection ownership recovery before cleanup",
+                        ))
+                    }
+                    DisconnectCredentialNamespace::DesktopAgentDeviceScoped => {
+                        crate::validate_desktop_agent_device_credential_key(&slot.account_key)?;
                         delete_exact(DESKTOP_AGENT_DEVICE_SERVICE, &slot.account_key)
                     }
                 }

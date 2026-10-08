@@ -1,6 +1,6 @@
 //! Conservative macOS reconciliation with descriptor-rooted, fail-closed local mutations.
 
-use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
+use std::path::PathBuf;
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
@@ -13,8 +13,7 @@ use tauri::{Manager, State};
 
 use super::*;
 
-const POLL_INTERVAL: Duration = Duration::from_secs(20);
-const OFFLINE_BACKOFF: Duration = Duration::from_secs(60);
+mod admission;
 mod all_roots;
 mod baseline;
 #[cfg(test)]
@@ -22,70 +21,41 @@ mod conflict_tests;
 mod conflicts;
 mod executor;
 mod lifecycle;
+mod polling;
 mod result;
 mod staging;
 #[cfg(test)]
 mod tests;
 
+pub(super) use admission::validate_connection_folders;
 use all_roots::sync_all_roots;
 use conflicts::materialize_conflict_copies as materialize_conflicts;
+pub(crate) use polling::start_polling;
+pub(super) use polling::stop_polling;
 use result::{settle_result, settle_root_refresh_failure};
 pub(super) use staging::remote_entry_for_review;
-
-pub(super) fn start_polling(app: &tauri::AppHandle, runtime: &Runtime) {
-    if runtime.polling_enabled.swap(true, Ordering::AcqRel) {
-        return;
-    }
-    let generation = runtime.poll_generation.fetch_add(1, Ordering::AcqRel) + 1;
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        loop {
-            let runtime = handle.state::<Runtime>();
-            let delay = if runtime.status() == shellx_drive_desktop_core::SyncStatus::Offline {
-                OFFLINE_BACKOFF
-            } else {
-                POLL_INTERVAL
-            };
-            tokio::time::sleep(delay).await;
-            if !runtime.polling_enabled.load(Ordering::Acquire)
-                || runtime.poll_generation.load(Ordering::Acquire) != generation
-            {
-                break;
-            }
-            if matches!(
-                runtime.status(),
-                shellx_drive_desktop_core::SyncStatus::NeedsSetup
-                    | shellx_drive_desktop_core::SyncStatus::NeedsReconnect
-                    | shellx_drive_desktop_core::SyncStatus::Syncing
-                    | shellx_drive_desktop_core::SyncStatus::Paused
-            ) {
-                continue;
-            }
-            if let Err(error) = sync_now_impl(&handle, &runtime).await {
-                eprintln!("ShellX Drive macOS automatic sync did not complete: {error}");
-            }
-        }
-    });
-}
-
-pub(super) fn stop_polling(runtime: &Runtime) {
-    runtime.polling_enabled.store(false, Ordering::Release);
-    runtime.poll_generation.fetch_add(1, Ordering::AcqRel);
-}
 
 #[tauri::command]
 pub(super) async fn sync_now(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     sync_now_impl(&app, &runtime).await
 }
 
 #[tauri::command]
 pub(super) async fn recheck_reviews(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     recheck_reviews_impl(&app, &runtime).await
 }
 
@@ -109,11 +79,37 @@ async fn sync_roots_impl(
     runtime: &Runtime,
     recheck_only: bool,
 ) -> Result<DesktopView, String> {
+    let result = sync_roots_pass(app, runtime, recheck_only, None).await;
+    runtime.mark_sync_check_finished();
+    result
+}
+
+async fn sync_roots_pass(
+    app: &tauri::AppHandle,
+    runtime: &Runtime,
+    recheck_only: bool,
+    poll_generation: Option<u64>,
+) -> Result<DesktopView, String> {
     runtime
         .require_candidate_recovery_complete()
         .map_err(macos_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
+        .map_err(macos_error)?;
+    validate_connection_folders(app, runtime)
+        .await
+        .map_err(macos_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(macos_error)?;
+    if !polling::scheduled_check_is_due(&manager, runtime, poll_generation)? {
+        return Ok(runtime.view());
+    }
+    runtime
+        .require_candidate_recovery_complete()
+        .and_then(|()| runtime.ensure_disconnect_cleanup_complete())
         .map_err(macos_error)?;
     invalidate_pending_confirmation(runtime);
     if let Err(error) = pairing::refresh_authorized_roots(runtime).await {

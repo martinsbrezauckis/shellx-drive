@@ -4068,7 +4068,7 @@ dependencies = [
 
 [[package]]
 name = "shellx-drive-desktop"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "chrono",
  "directories",
@@ -4092,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "shellx-drive-desktop-core"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -4114,7 +4114,7 @@ dependencies = [
 
 [[package]]
 name = "shellx-drive-updater-verifier"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "base64 0.23.1",
  "minisign-verify",

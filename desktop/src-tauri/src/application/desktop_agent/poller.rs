@@ -41,15 +41,46 @@ pub(crate) fn start_polling(app: &AppHandle, runtime: &Runtime) {
     {
         return;
     }
+    let manager = app.state::<crate::application::ConnectionManager>();
+    let Some(id) = manager.id_for_runtime(runtime) else {
+        runtime
+            .agent_polling_enabled
+            .store(false, Ordering::Release);
+        return;
+    };
+    if !manager.may_sync(runtime) {
+        runtime
+            .agent_polling_enabled
+            .store(false, Ordering::Release);
+        return;
+    }
+    let Ok(runtime) = manager.resolve(Some(&id)) else {
+        runtime
+            .agent_polling_enabled
+            .store(false, Ordering::Release);
+        return;
+    };
     let generation = runtime.agent_poll_generation.fetch_add(1, Ordering::AcqRel) + 1;
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let runtime = app.state::<Runtime>();
         loop {
             if !runtime.agent_polling_enabled.load(Ordering::Acquire)
                 || runtime.agent_poll_generation.load(Ordering::Acquire) != generation
             {
                 break;
+            }
+            let manager = app.state::<crate::application::ConnectionManager>();
+            if manager.id_for_runtime(&runtime).is_none()
+                || !runtime.coordinator.snapshot().desktop_agent_control.enabled
+            {
+                stop_polling(&runtime);
+                break;
+            }
+            // Removal, recovery and global updates fence new broker work.
+            // Capability-based Disconnect completion has its own retry task.
+            if !manager.may_sync(&runtime) {
+                tokio::time::sleep(AGENT_POLL_INTERVAL).await;
+                continue;
             }
             match reconcile_missing_device_credential(&runtime).await {
                 Ok(true) => {

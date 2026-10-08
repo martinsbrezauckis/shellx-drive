@@ -71,7 +71,7 @@ export function renderSyncLocations(view, escapeHtml, filter = "") {
   </li>`;
   }).join("");
   return `<section class="settings-section" aria-labelledby="sync-locations-heading">
-    <h3 id="sync-locations-heading" tabindex="-1">Managed Drive roots</h3><p class="when">One server and account use one local Drive folder. Every configured owned or shared root syncs automatically in one serialized pass. “Current status details” only identifies the root summarized above; it does not limit what syncs.</p>
+    <h3 id="sync-locations-heading" tabindex="-1">Managed Drive roots</h3><p class="when">Each server and account connection uses its own local Drive folder. Every configured owned or shared root syncs automatically in one serialized pass. “Current status details” summarizes the selected root.</p>
     <div class="sync-location-tools"><label>Find a Drive root<input type="search" data-sync-locations-filter autocomplete="off" placeholder="Name, local folder, status, or error" value="${escapeHtml(filter)}" /></label><output data-sync-locations-count role="status" aria-live="polite">${escapeHtml(matchingCopy)}</output></div>
     ${rows ? `<ul class="sync-location-list">${rows}</ul>` : `<p class="empty sync-location-empty">No configured Drive roots match “${escapeHtml(filter)}”.</p>`}
   </section>`;

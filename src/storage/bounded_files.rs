@@ -488,6 +488,15 @@ pub(super) fn file_is_effectively_trashed_with_cache(
             return Ok(true);
         }
         current = row.1;
+        if current.is_none() {
+            let workspace_id = root_workspace_id
+                .as_deref()
+                .expect("a resolved file row has a workspace");
+            for traversed_id in traversed {
+                cache.insert((workspace_id.to_string(), traversed_id), false);
+            }
+            return Ok(false);
+        }
     }
     Err(ApiError::Validation(format!(
         "file tree exceeds the {MAX_FILE_TREE_DEPTH}-level depth limit"

@@ -6,6 +6,7 @@ use super::{canonical_candidate_state, CanonicalCandidateState};
 
 pub(super) async fn admit_candidate_publication(
     runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     bearer_token: &str,
     candidate: &RemoteSessionRecord,
@@ -16,6 +17,7 @@ pub(super) async fn admit_candidate_publication(
     }
     retire_unpublished_session(
         runtime,
+        stopped,
         client,
         bearer_token,
         &candidate.account_email,

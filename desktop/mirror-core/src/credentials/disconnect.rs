@@ -45,6 +45,13 @@ impl WindowsCredentialStore {
             DisconnectCredentialNamespace::Canonical => WINDOWS_CREDENTIAL_SERVICE,
             DisconnectCredentialNamespace::PendingCandidate => WINDOWS_PENDING_CREDENTIAL_SERVICE,
             DisconnectCredentialNamespace::DesktopAgentDevice => {
+                return Err(crate::DesktopError::Credential(
+                    "Retained desktop-agent credential needs connection ownership recovery before cleanup."
+                        .to_string(),
+                ));
+            }
+            DisconnectCredentialNamespace::DesktopAgentDeviceScoped => {
+                crate::validate_desktop_agent_device_credential_key(&slot.account_key)?;
                 WINDOWS_DESKTOP_AGENT_CREDENTIAL_SERVICE
             }
         };

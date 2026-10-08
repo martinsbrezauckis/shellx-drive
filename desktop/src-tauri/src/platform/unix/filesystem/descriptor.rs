@@ -131,6 +131,8 @@ pub(super) fn create_private_staging_file(
     ensure_identity(guard, "private staging creation")?;
     let (parent, leaf) = destination_parent(guard, relative)?;
     let file = create_regular_file_at(&parent, &leaf)?;
+    #[cfg(target_os = "macos")]
+    shellx_drive_desktop_core::protect_new_private_staging_file(&file)?;
     validate_private_staging_file(&file)?;
     Ok(file)
 }

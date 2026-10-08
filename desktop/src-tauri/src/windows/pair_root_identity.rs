@@ -136,6 +136,23 @@ pub(super) fn open_identity_chain(path: &Path) -> CoreResult<DirectoryIdentityCh
     })
 }
 
+/// Compare native physical ancestry across independent connection containers.
+/// No-follow handles remain live for the complete comparison.
+pub(crate) fn validate_connection_folder_identity(
+    candidate: &Path,
+    reserved: &Path,
+) -> CoreResult<()> {
+    let candidate = open_identity_chain(candidate)?;
+    let reserved = match open_identity_chain(reserved) {
+        Ok(chain) => chain,
+        Err(DesktopError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(())
+        }
+        Err(error) => return Err(error),
+    };
+    reject_overlapping_chains(&[candidate, reserved])
+}
+
 fn directory_identity(file: &fs::File) -> CoreResult<WindowsDirectoryIdentity> {
     let mut info = FILE_ID_INFO::default();
     if unsafe {

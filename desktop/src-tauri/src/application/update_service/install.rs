@@ -6,7 +6,7 @@ use std::{
 };
 
 use shellx_drive_desktop_core::{DesktopState, LifecycleOperation, Result as CoreResult};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::Update;
 
 use super::{
@@ -41,6 +41,9 @@ impl DesktopUpdateService {
         candidate_id: &str,
         emit: impl Fn(DesktopUpdateEvent) + Send + Sync,
     ) -> Result<(), DesktopUpdateServiceError> {
+        let manager = app.state::<crate::application::ConnectionManager>();
+        let _global_update = manager.begin_global_update()?;
+        let _connection_lifecycles = quiesce_other_connections(&manager, runtime)?;
         let (candidate_id, update, mut lifecycle) =
             self.begin_install(runtime, candidate_id, None)?;
         let bytes = match download(&update, &emit).await {
@@ -70,6 +73,9 @@ impl DesktopUpdateService {
         hook: &mut H,
         emit: impl Fn(DesktopUpdateEvent) + Send + Sync,
     ) -> Result<(), DesktopUpdateServiceError> {
+        let manager = app.state::<crate::application::ConnectionManager>();
+        let _global_update = manager.begin_global_update()?;
+        let _connection_lifecycles = quiesce_other_connections(&manager, runtime)?;
         let (candidate_id, update, mut lifecycle) =
             self.begin_install(runtime, candidate_id, Some(command_id))?;
         if let Err(error) = hook
@@ -140,6 +146,32 @@ impl DesktopUpdateService {
         release?;
         Err(error)
     }
+}
+
+/// Reserve each other coordinator before downloads or installation can start.
+/// Active transfers return an actionable retry, and every reserved runtime is
+/// retained for the duration of the install so no pass can start mid-update.
+fn quiesce_other_connections(
+    manager: &crate::application::ConnectionManager,
+    owner: &Runtime,
+) -> Result<Vec<LifecycleOperation>, DesktopUpdateServiceError> {
+    if manager.has_unavailable_connections() {
+        return Err(shellx_drive_desktop_core::DesktopError::InvalidState(
+            "Restore the unavailable connection state before installing an update.".into(),
+        )
+        .into());
+    }
+    manager
+        .all_runtimes()
+        .iter()
+        .filter(|runtime| !std::ptr::eq(runtime.as_ref(), owner))
+        .map(|runtime| {
+            runtime
+                .coordinator
+                .begin_lifecycle_operation()
+                .map_err(Into::into)
+        })
+        .collect()
 }
 
 #[cfg(test)]

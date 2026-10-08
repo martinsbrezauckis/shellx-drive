@@ -7,6 +7,7 @@ use super::{DesktopUpdateServiceError, Runtime};
 pub(crate) fn reconcile_desktop_update_restart(
     runtime: &Runtime,
 ) -> CoreResult<DesktopUpdateRestartReadback> {
+    runtime.ensure_state_available()?;
     let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
     let mut state = runtime.coordinator.snapshot();
     let readback = state.read_desktop_update_restart(env!("CARGO_PKG_VERSION"))?;

@@ -8,6 +8,7 @@ mod direct_records;
 mod stored;
 
 pub(super) use direct_records::direct_retirement_records;
+pub(super) use stored::{owned_canonical_keys, owned_pending_slots};
 pub(super) use stored::{stored_session_credentials, StoredSessionCredential};
 
 /// Retire pending sessions not already tied to a direct local logout. The
@@ -21,14 +22,20 @@ pub(super) async fn retire_pending_remote_sessions(
     direct_retirements: &[RemoteSessionRecord],
     include_active_session: bool,
 ) -> CoreResult<()> {
-    state.prune_remote_sessions(Utc::now());
-    if include_active_session {
-        if let Some(active) = state.active_remote_session.take() {
-            state.record_pending_remote_revocation(active, Utc::now());
-        }
-    }
     let mut attempts = Vec::new();
-    for record in state.pending_remote_revocations.clone() {
+    let records = state
+        .pending_remote_revocations
+        .iter()
+        .chain(state.pending_candidate_session.iter())
+        .chain(
+            state
+                .active_remote_session
+                .iter()
+                .filter(|_| include_active_session),
+        )
+        .cloned()
+        .collect::<Vec<_>>();
+    for record in records {
         if !pending_record_requires_authorized_retirement(&record, candidate, direct_retirements) {
             continue;
         }

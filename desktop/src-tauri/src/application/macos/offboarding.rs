@@ -13,8 +13,13 @@ use super::*;
 #[tauri::command]
 pub(super) async fn disconnect(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     disconnect_impl(&app, &runtime).await
 }
 
@@ -51,7 +56,8 @@ pub(crate) async fn disconnect_impl(
     if !state.has_pending_disconnect_cleanup() {
         let intent = DisconnectCleanupIntent::for_disconnect_pairs(
             state.pairs().cloned().collect(),
-            MacOsCredentialStore::disconnect_credential_slots().map_err(macos_error)?,
+            crate::application::connection_credentials::cleanup_slots(runtime, &state)
+                .map_err(macos_error)?,
         )
         .map_err(macos_error)?;
         state
@@ -165,9 +171,7 @@ pub(crate) fn complete_local_cleanup_with_finalizer(
         store.save(&next)?;
         *state = next;
     }
-    crate::platform::unix::remove_owned_launch_at_login()?;
     let mut next = state.clone();
-    next.launch_at_login = false;
     finalize(&mut next)?;
     store.save(&next)?;
     *state = next;

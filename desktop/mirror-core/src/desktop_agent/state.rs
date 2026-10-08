@@ -106,6 +106,10 @@ pub struct DesktopAgentControlState {
     pub enabled: bool,
     #[serde(default)]
     pub device_id: Option<String>,
+    /// Exact locally derived native-store locator. Absence denotes legacy
+    /// bare-ID storage and grants no credential read or deletion authority.
+    #[serde(default)]
+    pub credential_key: Option<String>,
     #[serde(default)]
     pub credential_expires_at: Option<DateTime<Utc>>,
     #[serde(default)]
@@ -129,8 +133,11 @@ impl DesktopAgentControlState {
     ) -> Result<()> {
         ensure_opaque_id("desktop-agent device ID", &device_id)?;
         ensure_fingerprint(&pair_fingerprint)?;
+        let credential_key =
+            super::desktop_agent_device_credential_key(&pair_fingerprint, &device_id)?;
         self.enabled = true;
         self.device_id = Some(device_id);
+        self.credential_key = Some(credential_key);
         self.credential_expires_at = credential_expires_at;
         self.pair_fingerprint = Some(pair_fingerprint);
         self.last_terminal_command_id = None;
@@ -141,6 +148,7 @@ impl DesktopAgentControlState {
     pub fn clear_after_retirement(&mut self) {
         self.enabled = false;
         self.device_id = None;
+        self.credential_key = None;
         self.credential_expires_at = None;
         self.pair_fingerprint = None;
         self.last_terminal_command_id = None;

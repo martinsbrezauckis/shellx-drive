@@ -17,13 +17,19 @@ use shellx_drive_desktop_core::{
 
 use crate::{application::local_usage::LocalUsageCache, session_identity::SessionIdentity};
 
+#[path = "connection_runtime.rs"]
+mod connection_state;
 mod session_admission;
 
 pub(crate) struct Runtime {
+    state_load_unavailable: bool,
     pub(crate) store: StateStore,
     pub(crate) coordinator: MirrorCoordinator,
     pub(crate) platform: Box<dyn crate::platform::PlatformServices>,
     pub(crate) session: Mutex<Option<SessionIdentity>>,
+    /// The app catalog reserves this account before credential publication.
+    /// This is a non-secret ownership locator, including unpaired recovery.
+    owned_session_identity: Mutex<Option<SessionIdentity>>,
     pub(crate) pending_login: Mutex<Option<PendingLogin>>,
     pub(crate) auth_offboarding: AuthOffboardingGate,
     pub(crate) auth_publication: tokio::sync::Mutex<()>,
@@ -34,6 +40,7 @@ pub(crate) struct Runtime {
     pub(crate) next_review_confirmation: AtomicU64,
     pub(crate) polling_enabled: AtomicBool,
     pub(crate) poll_generation: AtomicU64,
+    last_sync_check_finished: Mutex<Option<std::time::Instant>>,
     pub(crate) agent_polling_enabled: AtomicBool,
     pub(crate) agent_poll_generation: AtomicU64,
     pub(crate) local_usage_cache: LocalUsageCache,
@@ -64,7 +71,27 @@ impl Runtime {
     /// orchestration and prevents Unix from accidentally adopting NTFS work.
     pub(crate) fn load_state() -> CoreResult<(StateStore, DesktopState)> {
         let store = StateStore::new(default_state_path()?);
-        let state = store.load()?;
+        let state = match store.load() {
+            Ok(state) => state,
+            Err(error)
+                if store.path().parent().is_some_and(|parent| {
+                    parent
+                        .join(".shellx-drive-private/connections-v1/catalog.json")
+                        .is_file()
+                }) =>
+            {
+                // The catalog retains identity/folder reservations and will
+                // project this connection as unavailable. Keep the unreadable
+                // legacy bytes intact so the app can show that recovery state.
+                DesktopState {
+                    last_error: Some(format!(
+                        "Drive cannot read its retained connection state: {error}"
+                    )),
+                    ..DesktopState::default()
+                }
+            }
+            Err(error) => return Err(error),
+        };
         Ok((store, state))
     }
 
@@ -73,11 +100,16 @@ impl Runtime {
         store: StateStore,
         state: DesktopState,
     ) -> Self {
+        let state_load_unavailable = state.last_error.as_deref().is_some_and(|error| {
+            error.starts_with("Drive cannot read its retained connection state:")
+        });
         Self {
+            state_load_unavailable,
             store,
             coordinator: MirrorCoordinator::new(state),
             platform,
             session: Mutex::new(None),
+            owned_session_identity: Mutex::new(None),
             pending_login: Mutex::new(None),
             auth_offboarding: AuthOffboardingGate::default(),
             auth_publication: tokio::sync::Mutex::new(()),
@@ -88,6 +120,7 @@ impl Runtime {
             next_review_confirmation: AtomicU64::new(0),
             polling_enabled: AtomicBool::new(false),
             poll_generation: AtomicU64::new(0),
+            last_sync_check_finished: Mutex::new(None),
             agent_polling_enabled: AtomicBool::new(false),
             agent_poll_generation: AtomicU64::new(0),
             local_usage_cache: LocalUsageCache::default(),
@@ -95,6 +128,7 @@ impl Runtime {
     }
 
     pub(crate) fn save(&self) -> CoreResult<()> {
+        self.ensure_state_available()?;
         self.store.save(&self.coordinator.snapshot())
     }
 
@@ -173,19 +207,6 @@ impl Runtime {
         Ok(())
     }
 
-    pub(crate) fn reconcile_launch_at_login(&self) {
-        let state = self.coordinator.snapshot();
-        let enabled = state.pair.is_some()
-            && state.launch_at_login
-            && state.pending_disconnect_cleanup.is_none();
-        if let Err(error) = self.platform.set_launch_at_login(enabled) {
-            self.coordinator.record_error(format!(
-                "Drive could not restore its launch-at-sign-in registration: {error}"
-            ));
-            let _ = self.save();
-        }
-    }
-
     pub(crate) fn ensure_disconnect_cleanup_complete(&self) -> CoreResult<()> {
         let state = self.coordinator.snapshot();
         if state.has_pending_disconnect_cleanup()
@@ -227,6 +248,12 @@ impl Runtime {
                     .snapshot()
                     .pair
                     .map(|pair| SessionIdentity::new(pair.server_url, pair.account_email))
+            })
+            .or_else(|| {
+                self.owned_session_identity
+                    .lock()
+                    .expect("owned identity lock")
+                    .clone()
             })
             .ok_or(DesktopError::NeedsSetup)
     }

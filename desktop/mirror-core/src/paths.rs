@@ -21,6 +21,55 @@ mod staging_tests;
 mod unix_staging;
 pub use remote::{inspect_remote_paths, map_remote_paths, RemotePathIssue, RemotePathMapping};
 
+/// Encode an admitted absolute path for a pathname-based Windows API without
+/// depending on the process manifest or the host's long-path policy. This is
+/// lexical conversion only: it does not follow links or replace caller pins.
+#[cfg(target_os = "windows")]
+pub fn windows_absolute_path_wide(path: &Path) -> Result<Vec<u16>> {
+    use std::{os::windows::ffi::OsStrExt, path::Prefix};
+
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|part| matches!(part, Component::ParentDir))
+    {
+        return Err(DesktopError::UnsafePath(
+            "Windows API path must be absolute without parent traversal".to_string(),
+        ));
+    }
+    if path.as_os_str().encode_wide().any(|unit| unit == 0) {
+        return Err(DesktopError::UnsafePath(
+            "Windows API path contains a NUL".to_string(),
+        ));
+    }
+    // Normalize ordinary Win32 separators and dot components before adding
+    // the verbatim prefix, whose parser deliberately performs no expansion.
+    let absolute = std::path::absolute(path)?;
+    let wide = absolute.as_os_str().encode_wide().collect::<Vec<_>>();
+    let mut extended = match absolute.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(_) => r"\\?\".encode_utf16().chain(wide).collect::<Vec<_>>(),
+            Prefix::UNC(_, _) => r"\\?\UNC\"
+                .encode_utf16()
+                .chain(wide.into_iter().skip(2))
+                .collect(),
+            Prefix::VerbatimDisk(_) | Prefix::VerbatimUNC(_, _) | Prefix::Verbatim(_) => wide,
+            _ => {
+                return Err(DesktopError::UnsafePath(
+                    "Windows API path uses an unsupported device namespace".to_string(),
+                ));
+            }
+        },
+        _ => {
+            return Err(DesktopError::UnsafePath(
+                "Windows API path has no absolute namespace".to_string(),
+            ));
+        }
+    };
+    extended.push(0);
+    Ok(extended)
+}
+
 #[cfg(target_os = "windows")]
 pub fn validate_private_staging_file(file: &fs::File) -> Result<()> {
     private_staging::protect_and_validate_file(file)
@@ -29,6 +78,13 @@ pub fn validate_private_staging_file(file: &fs::File) -> Result<()> {
 #[cfg(unix)]
 pub fn validate_private_staging_file(file: &fs::File) -> Result<()> {
     unix_staging::validate_private_file(file)
+}
+
+/// Protect a create-new, empty staging payload inside an admitted private
+/// directory before copying bytes. Existing bodies are only validated.
+#[cfg(target_os = "macos")]
+pub fn protect_new_private_staging_file(file: &fs::File) -> Result<()> {
+    unix_staging::protect_new_private_file(file)
 }
 
 #[cfg(target_os = "windows")]

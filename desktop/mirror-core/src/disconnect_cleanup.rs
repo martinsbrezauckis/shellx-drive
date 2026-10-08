@@ -22,7 +22,10 @@ pub enum DisconnectCredentialNamespace {
     PendingCandidate,
     /// Separate fixed credential service for an enrolled device broker token.
     /// It is never interpreted as a Drive bearer or a delegated-agent token.
+    /// Legacy bare-ID journals remain retained until ownership migration.
     DesktopAgentDevice,
+    /// Locally derived, connection-scoped locator in that same device service.
+    DesktopAgentDeviceScoped,
 }
 
 /// A non-secret, exact locator for one fixed-service credential. It contains

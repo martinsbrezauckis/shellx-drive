@@ -17,12 +17,16 @@ pub(crate) mod sync;
 mod updates;
 
 use super::*;
-use shellx_drive_desktop_core::{DesktopError, Result as CoreResult};
+use shellx_drive_desktop_core::{DesktopError, DesktopState, Result as CoreResult, StateStore};
 
 impl Runtime {
     fn load_macos() -> CoreResult<Self> {
+        let (store, state) = Self::load_state()?;
+        Self::load_connection(store, state)
+    }
+
+    pub(crate) fn load_connection(store: StateStore, mut state: DesktopState) -> CoreResult<Self> {
         let platform = Box::new(crate::platform::unix::UnixPlatformServices::default());
-        let (store, mut state) = Self::load_state()?;
         if offboarding_resume::resume_macos_disconnect_cleanup(&store, &mut state).is_err() {
             state.last_error = Some(
                 "Disconnect local cleanup remains pending; retry Disconnect to complete it."
@@ -30,9 +34,7 @@ impl Runtime {
             );
             let _ = store.save(&state);
         }
-        let runtime = Self::from_loaded_state(platform, store, state);
-        candidate_recovery::recover_at_startup(&runtime);
-        Ok(runtime)
+        Ok(Self::from_loaded_state(platform, store, state))
     }
 }
 

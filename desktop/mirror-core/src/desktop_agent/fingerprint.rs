@@ -46,7 +46,7 @@ pub fn desktop_agent_enrollment_fingerprint(server_url: &str, account_email: &st
     crate::hex_digest(hasher.finalize().as_slice())
 }
 
-fn hash_fingerprint_field(hasher: &mut Sha256, value: &str) {
+pub(super) fn hash_fingerprint_field(hasher: &mut Sha256, value: &str) {
     hasher.update((value.len() as u64).to_le_bytes());
     hasher.update(value.as_bytes());
 }

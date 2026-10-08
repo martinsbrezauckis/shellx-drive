@@ -7,7 +7,12 @@
 
 #[cfg(any(target_os = "macos", target_os = "linux", test))]
 pub(crate) mod auth_publication;
+pub(crate) mod candidate_admission;
 pub(crate) mod commands;
+pub(crate) mod connection_commands;
+pub(crate) mod connection_credentials;
+pub(crate) mod connection_folders;
+pub(crate) mod connections;
 pub(crate) mod desktop_agent;
 mod disconnect;
 pub(crate) mod lifecycle;
@@ -23,6 +28,7 @@ mod unix_uninstall;
 pub(crate) mod update_service;
 mod view;
 
+pub(crate) use connections::ConnectionManager;
 pub(crate) use disconnect::request_disconnect_after_sync;
 pub(crate) use runtime::{
     invalidate_pending_confirmation, PendingLogin, PendingReviewConfirmation, Runtime,

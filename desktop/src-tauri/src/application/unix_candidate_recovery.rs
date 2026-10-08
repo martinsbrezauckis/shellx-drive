@@ -10,7 +10,10 @@ use shellx_drive_desktop_core::{
     Result as CoreResult, StagedCandidateRecoveryAction,
 };
 
-use crate::session_identity::{ServiceCredentialKey, SessionIdentity};
+use crate::session_identity::{pending_credential_slot, ServiceCredentialKey, SessionIdentity};
+
+mod prior;
+pub(super) use prior::retire_prior_candidate_sessions;
 
 pub(super) struct RecoveryStores<'a> {
     pub canonical: &'a dyn CredentialStore,
@@ -49,7 +52,7 @@ pub(super) fn ordered_slots(
 ) -> CoreResult<Vec<ServiceCredentialKey>> {
     let mut slots = keys
         .into_iter()
-        .map(|key| SessionIdentity::parse_pending_service_key(&key).ok_or_else(recovery_error))
+        .map(|key| pending_credential_slot(state, &key))
         .collect::<CoreResult<Vec<_>>>()?;
     slots.sort_by(|left, right| {
         compare_staged_candidate_recovery_order(
@@ -81,11 +84,14 @@ pub(super) async fn recover_slot<Save, Remote, RemoteFuture, Cleanup>(
     cleanup_canonical: Cleanup,
 ) -> CoreResult<()>
 where
-    Save: FnOnce(&DesktopState) -> CoreResult<()>,
+    Save: Fn(&DesktopState) -> CoreResult<()>,
     Remote: FnOnce(RemoteRecoveryAction) -> RemoteFuture,
     RemoteFuture: Future<Output = CoreResult<()>>,
     Cleanup: FnOnce() -> CoreResult<()>,
 {
+    if pending_credential_slot(state, &slot.account_key)? != *slot {
+        return Err(recovery_error());
+    }
     let canonical_key = slot.identity.credential_key();
     let action = staged_candidate_recovery_action(
         state,
@@ -98,13 +104,7 @@ where
         StagedCandidateRecoveryAction::Retain => return Err(recovery_error()),
         StagedCandidateRecoveryAction::Retire => {
             remote(RemoteRecoveryAction::RetireCandidate).await?;
-            if let Some(record) = matching_record(state, slot) {
-                // Confirm retirement and save locator removal before deleting
-                // the only staged bearer. A failed save retains admission.
-                let persisted = state_after_confirmed_remote_retirement(state, &record);
-                save(&persisted)?;
-                *state = persisted;
-            }
+            return remove_retired_slot(state, slot, stores.pending, save);
         }
         StagedCandidateRecoveryAction::Promote => {
             let record = matching_record(state, slot)
@@ -150,6 +150,35 @@ where
     }
 }
 
+/// Keep ownership until local readback confirms deletion. If the following
+/// state save fails, the persisted exact locator remains a same-identity
+/// fresh-login recovery capability even though its staged bearer is absent.
+pub(super) fn remove_retired_slot(
+    state: &mut DesktopState,
+    slot: &ServiceCredentialKey,
+    pending: &dyn CredentialStore,
+    save: impl FnOnce(&DesktopState) -> CoreResult<()>,
+) -> CoreResult<()> {
+    if pending_credential_slot(state, &slot.account_key)? != *slot {
+        return Err(recovery_error());
+    }
+    match classify_exact_credential_removal(
+        pending.delete(&slot.account_key),
+        pending.get(&slot.account_key),
+    ) {
+        ExactCredentialRemoval::Removed => {}
+        ExactCredentialRemoval::Retained | ExactCredentialRemoval::Unknown => {
+            return Err(recovery_error())
+        }
+    }
+    if let Some(record) = matching_record(state, slot) {
+        let persisted = state_after_confirmed_remote_retirement(state, &record);
+        save(&persisted)?;
+        *state = persisted;
+    }
+    Ok(())
+}
+
 fn matching_record(
     state: &DesktopState,
     slot: &ServiceCredentialKey,
@@ -172,6 +201,8 @@ fn recovery_error() -> DesktopError {
     )
 }
 
+#[cfg(test)]
+mod identity_tests;
 #[cfg(test)]
 mod publication_tests;
 #[cfg(test)]

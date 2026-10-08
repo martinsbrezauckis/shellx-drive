@@ -25,7 +25,8 @@ export function applyDesktopUpdateEvent(state, message) {
 export function renderDesktopUpdateNotice(state, escape) {
   if (state.status !== "available") return "";
   const version = escape(state.info?.version || "new");
-  return `<section class="desktop-update-notice" role="status" aria-label="Desktop update available"><div><strong>ShellX Drive Desktop ${version} is available</strong><span>Review the signed update before installing it.</span></div><button class="button" data-action="desktop-update-open">Review update</button></section>`;
+  const notes = state.info?.notes ? `<span>${escape(state.info.notes.slice(0, 500))}</span>` : "";
+  return `<section class="desktop-update-notice" role="status" aria-label="Desktop update available"><div><strong>ShellX Drive Desktop ${version} is available</strong>${notes}<span>The app will restart after signature verification and installation.</span></div><button class="button" data-action="desktop-update-install">Download and install</button></section>`;
 }
 
 export function renderDesktopUpdateRecoveryNotice(targetVersion, currentVersion, escape) {
@@ -44,9 +45,7 @@ export function renderDesktopUpdate(state, currentVersion, escape) {
   } else if (state.status === "current") {
     body += `<p class="update-current" role="status">This desktop app is up to date.</p>`;
   } else if (state.status === "available") {
-    body += `<div class="desktop-update-available" role="status"><strong>Version ${escape(state.info?.version || "new")} is available</strong>${state.info?.notes ? `<p>${escape(state.info.notes.slice(0, 500))}</p>` : ""}</div>`;
-  } else if (state.status === "confirming") {
-    body += `<div class="review-confirmation" role="alert"><p>Download and install signed ShellX Drive Desktop ${escape(state.info?.version || "update")}? The app will restart after signature verification and installation.</p><div class="action-row"><button class="button" data-action="desktop-update-cancel">Cancel</button><button class="button primary" data-action="desktop-update-install">Download and install</button></div></div>`;
+    body += `<div class="desktop-update-available" role="status"><strong>Version ${escape(state.info?.version || "new")} is available</strong>${state.info?.notes ? `<p>${escape(state.info.notes.slice(0, 500))}</p>` : ""}<p>The app will restart after signature verification and installation.</p></div>`;
   } else if (state.status === "downloading") {
     const percent = desktopUpdatePercent(state);
     const progress = percent === null ? "Downloading signed update…" : `Downloading signed update… ${percent}%`;
@@ -59,11 +58,11 @@ export function renderDesktopUpdate(state, currentVersion, escape) {
     body += `<p class="diagnostic" role="alert">${escape(state.error || "The update check could not complete.")}</p>`;
   }
   const busy = ["checking", "downloading", "installing", "restarting"].includes(state.status);
-  const action = ["available", "confirming", "downloading", "installing", "restarting"].includes(state.status)
+  const action = ["available", "downloading", "installing", "restarting"].includes(state.status)
     ? ""
     : `<div class="action-row"><button class="button" data-action="desktop-update-check" ${busy ? "disabled" : ""}>Check for updates</button></div>`;
   const availableAction = state.status === "available"
-    ? `<div class="action-row"><button class="button primary" data-action="desktop-update-confirm">Review update</button></div>`
+    ? `<div class="action-row"><button class="button primary" data-action="desktop-update-install">Download and install</button></div>`
     : "";
   return `<section class="settings-section" aria-labelledby="desktop-update-heading"><h3 id="desktop-update-heading">Desktop app</h3><p class="app-version">Installed version ${version}</p>${body}${action}${availableAction}</section>`;
 }

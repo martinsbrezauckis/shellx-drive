@@ -114,11 +114,62 @@ and remains ordinary-user authority. A local delegation follows its owner's
 current administrator role. Folder grants retain their separate `/agent/v1`
 subtree authority.
 
+## Desktop connections
+
+Use the native desktop app to set up and manage local connections. Follow the
+[Windows](../../docs/public/WINDOWS_DESKTOP.md),
+[macOS](../../docs/public/MACOS_DESKTOP.md), or
+[Linux](../../docs/public/LINUX_DESKTOP.md) guide for package installation and
+platform requirements.
+
+1. On first launch, choose appearance, launch at login, and the default sync
+   check interval in **App preferences**, then **Save and continue**.
+2. Open **Servers → Add server**, enter a friendly name and HTTPS server URL,
+   and choose **Validate server**.
+3. Enter **Account email** and the current **Server password**, including a new
+   password after changing or resetting it on the server. Provide TOTP or a
+   recovery code only when the account requires it.
+4. Select an accessible Drive root. Use **Browse…** in the native folder picker
+   to choose a dedicated empty ordinary local container separate from other
+   connections and sync tools. Choose an interval or **Use app default**, then
+   **Connect and start syncing**.
+
+Multiple servers and distinct accounts on the same server keep independent
+sign-ins, folders, roots, reviews, pause state, and remote-agent enrollments.
+A duplicate verified server/account offers its existing saved connection.
+Selecting a server changes the displayed details while configured, unpaused
+connections continue syncing. Click its folder path in **Servers** to open the
+local base, including while paused or awaiting sign-in.
+
+**Edit server** changes the selected connection's friendly name and interval.
+**Update sign-in** renews the same account while preserving its folder and sync
+settings. Folder replacement uses **Browse…** to select a new empty separate
+folder and requires confirmation before **Save server**; resolve pending reviews
+first. Drive starts a fresh sync there and keeps the old files in place.
+**Remove server** safely retires only the selected connection and retains its
+local files, other connections, and app preferences.
+
+**App settings** owns appearance, launch at login, the default interval, and
+desktop updates. The initial interval is 20 seconds; supported choices are
+20 seconds, 1 minute, 5 minutes, 15 minutes, 30 minutes, and 1 hour. Inherited
+connections follow default changes; explicit overrides retain their value.
+Checks wait for that delay after a pass finishes, with at least a one-minute
+offline retry delay. **History**, the third tab, combines activity with
+connection/account and time-frame filters, search, and paging. For an available
+signed desktop update, inspect its displayed version, notes, and trust guidance,
+then choose **Download and install** directly in **App settings**. Verify the
+post-restart version when checking that installation completed.
+
+Upgrading preserves an existing connection's local paths, history, pause state,
+preferences, sign-in, and enrollment. These local app controls are distinct
+from the authenticated remote desktop broker routes below.
+
 ## Remote desktop actions
 
 After the user locally enables control on their paired desktop, their current
-account-wide delegation can operate that device through Drive's outbound-poll
-broker. Use the same owner credential for these routes:
+account-wide delegation can operate that connection's enrolled device through
+Drive's outbound-poll broker. Additional desktop connections retain independent
+enrollments. Use the corresponding server and owner credential for these routes:
 
 | Method | Path | Request / result |
 |---|---|---|

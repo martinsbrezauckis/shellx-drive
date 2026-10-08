@@ -11,6 +11,7 @@ use shellx_drive_desktop_core::{
     resolve_review_decision, review_confirmation_fingerprint, DesktopError, DriveHttpClient,
     ReviewAction, ReviewDecision,
 };
+use tauri::Manager;
 
 mod mutations;
 mod recovery;
@@ -23,6 +24,14 @@ pub(crate) async fn choose_review_action_impl(
     action: ReviewAction,
     confirmation_id: String,
 ) -> Result<DesktopView, String> {
+    sync::validate_connection_folders(app, runtime)
+        .await
+        .map_err(macos_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(macos_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(macos_error)?;

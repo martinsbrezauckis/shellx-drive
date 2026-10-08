@@ -6,21 +6,17 @@ use super::*;
 mod local;
 pub(crate) use local::{
     complete_local_cleanup_with_finalizer, complete_pending_local_cleanup,
-    persist_disconnect_cleanup_intent, resume_disconnected_local_cleanup,
+    persist_disconnect_cleanup_intent, resume_disconnected_local_cleanup, scoped_credential_slots,
     DISCONNECT_CLEANUP_PENDING_ERROR,
 };
-
-pub(super) async fn disconnect(
-    app: tauri::AppHandle,
-    runtime: tauri::State<'_, Runtime>,
-) -> Result<DesktopView, String> {
-    disconnect_impl(&app, &runtime).await
-}
 
 pub(crate) async fn disconnect_impl(
     app: &tauri::AppHandle,
     runtime: &Runtime,
 ) -> Result<DesktopView, String> {
+    app.state::<ConnectionManager>()
+        .ensure_mutation_allowed()
+        .map_err(user_error)?;
     if crate::application::desktop_agent::pending_disconnect_requires_capability_retry(runtime) {
         return crate::application::desktop_agent::retry_pending_disconnect_completion(
             app, runtime,

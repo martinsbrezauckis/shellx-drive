@@ -1,16 +1,19 @@
 //! Linux polling and reconciliation command admission.
 
+mod polling;
 mod recovery;
 mod restore;
 mod review_execution;
 pub(crate) mod reviews;
 
+use polling::effective_poll_interval;
+pub(crate) use polling::start_polling;
+pub(super) use polling::stop_polling;
 use recovery::*;
 use review_execution::*;
 
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
-use std::{sync::atomic::Ordering, time::Duration};
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
@@ -19,11 +22,11 @@ use shellx_drive_desktop_core::{
     review_confirmation_fingerprint, reviewed_local_subtree_matches_baseline,
     reviewed_remote_subtree_matches_baseline, sync_pair_id, trashed_remote_response_matches,
     ActivityEntry, DesktopError, Result as CoreResult, ReviewDecision, ReviewItem, SyncPair,
-    SyncStatus,
 };
 use tauri::{AppHandle, Manager, State};
 
 use crate::application::{
+    connections::ConnectionManager,
     invalidate_pending_confirmation,
     sync_terminal::failure::{persist_terminal_failure, TerminalFailure},
     DesktopView, Runtime,
@@ -37,31 +40,42 @@ use all_roots::reconcile_all_roots;
 
 mod all_roots;
 
-const POLL_INTERVAL: Duration = Duration::from_secs(20);
-const OFFLINE_BACKOFF: Duration = Duration::from_secs(60);
-
 #[tauri::command]
 pub(super) async fn sync_now(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     sync_or_recheck(&app, &runtime, false).await
 }
 
 #[tauri::command]
 pub(super) async fn recheck_reviews(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     sync_or_recheck(&app, &runtime, true).await
 }
 
 #[tauri::command]
 pub(super) async fn set_paused(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     paused: bool,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     crate::application::lifecycle::persist_paused_state(&runtime, paused)
         .await
         .map_err(|error| error.to_string())?;
@@ -69,62 +83,70 @@ pub(super) async fn set_paused(
     Ok(runtime.view())
 }
 
-pub(super) fn start_polling(app: &AppHandle, runtime: &Runtime) {
-    if runtime
-        .coordinator
-        .snapshot()
-        .has_pending_disconnect_cleanup()
-        || runtime.polling_enabled.swap(true, Ordering::AcqRel)
-    {
-        return;
-    }
-    let generation = runtime.poll_generation.fetch_add(1, Ordering::AcqRel) + 1;
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        loop {
-            let runtime = app.state::<Runtime>();
-            let delay = if runtime.status() == SyncStatus::Offline {
-                OFFLINE_BACKOFF
-            } else {
-                POLL_INTERVAL
-            };
-            tokio::time::sleep(delay).await;
-            if !runtime.polling_enabled.load(Ordering::Acquire)
-                || runtime.poll_generation.load(Ordering::Acquire) != generation
-            {
-                break;
-            }
-            if matches!(
-                runtime.status(),
-                SyncStatus::NeedsSetup
-                    | SyncStatus::NeedsReconnect
-                    | SyncStatus::Syncing
-                    | SyncStatus::Paused
-            ) {
-                continue;
-            }
-            if let Err(error) = sync_or_recheck(&app, &runtime, false).await {
-                eprintln!("ShellX Drive Linux automatic poll did not complete: {error}");
-            }
-        }
-    });
-}
-
-pub(super) fn stop_polling(runtime: &Runtime) {
-    runtime.polling_enabled.store(false, Ordering::Release);
-    runtime.poll_generation.fetch_add(1, Ordering::AcqRel);
-}
-
 pub(crate) async fn sync_or_recheck(
     app: &AppHandle,
     runtime: &Runtime,
     recheck: bool,
+) -> Result<DesktopView, String> {
+    sync_with_schedule(app, runtime, recheck, false).await
+}
+
+async fn sync_with_schedule(
+    app: &AppHandle,
+    runtime: &Runtime,
+    recheck: bool,
+    scheduled: bool,
+) -> Result<DesktopView, String> {
+    let result = run_sync_or_recheck(app, runtime, recheck, scheduled).await;
+    runtime.mark_sync_check_finished();
+    result
+}
+
+async fn run_sync_or_recheck(
+    app: &AppHandle,
+    runtime: &Runtime,
+    recheck: bool,
+    scheduled: bool,
 ) -> Result<DesktopView, String> {
     runtime
         .require_candidate_recovery_complete()
         .map_err(present_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
+        .map_err(present_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "Drive connection is no longer registered.".to_string())?;
+    {
+        let _admission = manager.admission.lock().await;
+        let state = runtime.coordinator.snapshot();
+        if let Some(base) = state.sync_root_base.as_ref() {
+            manager
+                .validate_existing_connection_folder(&id, base)
+                .map_err(present_error)?;
+        }
+        for pair in state.pairs() {
+            manager
+                .validate_existing_connection_folder(&id, &pair.local_root)
+                .map_err(present_error)?;
+        }
+    }
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(present_error)?;
+    if scheduled
+        && !runtime
+            .sync_check_delay(effective_poll_interval(&manager, runtime))
+            .is_zero()
+    {
+        return Ok(runtime.view());
+    }
+    // A connection may have been removed or offboarded while queued fairly.
+    runtime
+        .require_candidate_recovery_complete()
+        .and_then(|()| runtime.ensure_disconnect_cleanup_complete())
         .map_err(present_error)?;
     if !recheck {
         invalidate_pending_confirmation(runtime);

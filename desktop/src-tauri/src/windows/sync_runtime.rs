@@ -24,6 +24,17 @@ use shellx_drive_desktop_core::apply_sync_root_policy;
 /// A conservative state poller replaces a fragile filesystem watcher. It
 /// invokes exactly the same scoped-root paths as the manual commands.
 pub(super) fn start_polling(app: &tauri::AppHandle, runtime: &Runtime) {
+    let manager = app.state::<ConnectionManager>();
+    let Some(runtime) = manager
+        .all_runtimes()
+        .into_iter()
+        .find(|candidate| std::ptr::eq(candidate.as_ref(), runtime))
+    else {
+        return;
+    };
+    if !manager.may_sync(&runtime) {
+        return;
+    }
     if runtime
         .coordinator
         .snapshot()
@@ -35,20 +46,31 @@ pub(super) fn start_polling(app: &tauri::AppHandle, runtime: &Runtime) {
         return;
     }
     let generation = runtime.poll_generation.fetch_add(1, Ordering::AcqRel) + 1;
+    runtime.mark_sync_check_finished();
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         loop {
-            let runtime = handle.state::<Runtime>();
+            let manager = handle.state::<ConnectionManager>();
+            let interval = manager.effective_interval(&runtime);
             let delay = if runtime.status() == SyncStatus::Offline {
-                OFFLINE_BACKOFF
+                interval.max(OFFLINE_BACKOFF)
             } else {
-                POLL_INTERVAL
+                interval
             };
-            tokio::time::sleep(delay).await;
+            tokio::time::sleep(runtime.sync_check_delay(delay).max(Duration::from_secs(1))).await;
             if !runtime.polling_enabled.load(Ordering::Acquire)
                 || runtime.poll_generation.load(Ordering::Acquire) != generation
             {
                 break;
+            }
+            let interval = manager.effective_interval(&runtime);
+            let interval = if runtime.status() == SyncStatus::Offline {
+                interval.max(OFFLINE_BACKOFF)
+            } else {
+                interval
+            };
+            if !runtime.sync_check_delay(interval).is_zero() || !manager.may_sync(&runtime) {
+                continue;
             }
             match runtime.status() {
                 SyncStatus::NeedsSetup
@@ -60,7 +82,10 @@ pub(super) fn start_polling(app: &tauri::AppHandle, runtime: &Runtime) {
                 | SyncStatus::NeedsReview
                 | SyncStatus::Error => {}
             }
-            let result = sync_now_impl(&handle, &runtime).await;
+            let result = sync_now_pass(&handle, &runtime, Some(generation)).await;
+            if runtime.poll_generation.load(Ordering::Acquire) == generation {
+                runtime.mark_sync_check_finished();
+            }
             if let Err(error) = result {
                 eprintln!("ShellX Drive automatic poll did not complete: {error}");
             }
@@ -76,16 +101,24 @@ pub(super) fn stop_polling(runtime: &Runtime) {
 #[tauri::command]
 pub(super) async fn sync_now(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     sync_now_impl(&app, &runtime).await
 }
 
 #[tauri::command]
 pub(super) async fn recheck_reviews(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     recheck_reviews_impl(&app, &runtime, true).await
 }
 
@@ -93,11 +126,54 @@ pub(crate) async fn sync_now_impl(
     app: &tauri::AppHandle,
     runtime: &Runtime,
 ) -> Result<DesktopView, String> {
+    let result = sync_now_pass(app, runtime, None).await;
+    runtime.mark_sync_check_finished();
+    result
+}
+
+async fn sync_now_pass(
+    app: &tauri::AppHandle,
+    runtime: &Runtime,
+    poll_generation: Option<u64>,
+) -> Result<DesktopView, String> {
+    recheck_connection_folders(app, runtime)
+        .await
+        .map_err(user_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(user_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
+        .map_err(user_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(user_error)?;
+    if poll_generation.is_some_and(|generation| {
+        !runtime.polling_enabled.load(Ordering::Acquire)
+            || runtime.poll_generation.load(Ordering::Acquire) != generation
+    }) {
+        return Err(
+            "This automatic sync check was canceled by a newer connection operation.".to_string(),
+        );
+    }
+    if poll_generation.is_some() {
+        let interval = manager.effective_interval(runtime);
+        let interval = if runtime.status() == SyncStatus::Offline {
+            interval.max(OFFLINE_BACKOFF)
+        } else {
+            interval
+        };
+        // A manual check may have completed while this poll waited fairly.
+        // Keep its new deadline instead of starting queued catch-up work.
+        if !runtime.sync_check_delay(interval).is_zero() {
+            return Ok(runtime.view());
+        }
+    }
+    runtime
+        .require_candidate_recovery_complete()
+        .and_then(|()| runtime.ensure_disconnect_cleanup_complete())
         .map_err(user_error)?;
     invalidate_pending_confirmation(runtime);
     // Refresh discovery before reserving a reconciliation run. This is the
@@ -122,11 +198,33 @@ pub(crate) async fn recheck_reviews_impl(
     runtime: &Runtime,
     invalidate_confirmation: bool,
 ) -> Result<DesktopView, String> {
+    let result = recheck_reviews_pass(app, runtime, invalidate_confirmation).await;
+    runtime.mark_sync_check_finished();
+    result
+}
+
+async fn recheck_reviews_pass(
+    app: &tauri::AppHandle,
+    runtime: &Runtime,
+    invalidate_confirmation: bool,
+) -> Result<DesktopView, String> {
+    recheck_connection_folders(app, runtime)
+        .await
+        .map_err(user_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(user_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
+        .map_err(user_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(user_error)?;
+    runtime
+        .require_candidate_recovery_complete()
+        .and_then(|()| runtime.ensure_disconnect_cleanup_complete())
         .map_err(user_error)?;
     if invalidate_confirmation {
         invalidate_pending_confirmation(runtime);
@@ -139,6 +237,25 @@ pub(crate) async fn recheck_reviews_impl(
     }
     let run = runtime.coordinator.begin_run().map_err(user_error)?;
     recheck_reviews_with_run(app, runtime, run).await
+}
+
+pub(super) async fn recheck_connection_folders(
+    app: &tauri::AppHandle,
+    runtime: &Runtime,
+) -> CoreResult<()> {
+    let manager = app.state::<ConnectionManager>();
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| DesktopError::InvalidState("unknown server connection".to_string()))?;
+    let _admission = manager.admission.lock().await;
+    let state = runtime.coordinator.snapshot();
+    if let Some(base) = state.sync_root_base.as_ref() {
+        manager.validate_existing_connection_folder(&id, base)?;
+    }
+    for pair in state.pairs() {
+        manager.validate_existing_connection_folder(&id, &pair.local_root)?;
+    }
+    Ok(())
 }
 
 pub(super) async fn recheck_reviews_with_run(

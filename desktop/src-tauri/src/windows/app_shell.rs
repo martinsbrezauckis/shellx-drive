@@ -1,94 +1,70 @@
 //! Windows startup, tray, notification, and Tauri application shell.
 
-use super::super::lifecycle::toggle_paused_state;
 use super::app_updates::PendingDesktopUpdate;
-use super::tray_policy::{status_label, tray_sync_is_enabled};
+use super::tray_policy::status_label;
 use super::*;
 use tauri::Emitter;
 
-fn tray_tooltip(runtime: &Runtime) -> String {
-    let view = runtime.view();
-    match view.status {
-        "syncing" => "ShellX Drive — Syncing configured locations".to_string(),
-        "needs_review" => format!("ShellX Drive — Needs review ({})", view.review_count),
-        _ => format!("ShellX Drive — {}", status_label(view.status)),
-    }
+fn tray_tooltip(manager: &ConnectionManager) -> String {
+    let view = manager.view();
+    let attention = view
+        .connections
+        .iter()
+        .filter(|connection| {
+            matches!(
+                connection.view.status,
+                "needs_review" | "needs_reconnect" | "offline" | "error"
+            )
+        })
+        .count();
+    let syncing = view
+        .connections
+        .iter()
+        .filter(|connection| connection.view.status == "syncing")
+        .count();
+    format!(
+        "ShellX Drive — {} servers · {} syncing · {} need attention",
+        view.connections.len(),
+        syncing,
+        attention
+    )
 }
 
 fn build_tray_menu<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    runtime: &Runtime,
+    manager: &ConnectionManager,
 ) -> tauri::Result<Menu<R>> {
-    let state = runtime.coordinator.snapshot();
-    let view = runtime.view();
-    let paired = state.pair.is_some();
-    let review_pending = state.has_any_reviews();
-    let cleanup_pending = state.has_pending_disconnect_cleanup();
-    let credential_available = runtime.require_pair_credential().is_ok();
-    let can_sync = tray_sync_is_enabled(
-        paired,
-        credential_available,
-        cleanup_pending,
-        state.paused,
-        view.status,
-    );
-    let can_pause = paired && !cleanup_pending && view.status != "syncing";
-    let status = MenuItem::with_id(
-        app,
-        "status",
-        format!("ShellX Drive — {}", status_label(view.status)),
-        false,
-        None::<&str>,
-    )?;
+    let menu = Menu::new(app)?;
+    let status = MenuItem::with_id(app, "status", tray_tooltip(manager), false, None::<&str>)?;
+    menu.append(&status)?;
     let show = MenuItem::with_id(app, "show", "Open ShellX Drive", true, None::<&str>)?;
-    let open_local =
-        MenuItem::with_id(app, "open-local", "Open local folder", paired, None::<&str>)?;
-    let open_drive = MenuItem::with_id(app, "open-drive", "Open Drive", paired, None::<&str>)?;
-    let sync = MenuItem::with_id(
-        app,
-        if review_pending {
-            "recheck-reviews"
-        } else {
-            "sync-now"
-        },
-        if review_pending {
-            "Recheck review"
-        } else {
-            "Sync now"
-        },
-        can_sync,
-        None::<&str>,
-    )?;
-    let pause = MenuItem::with_id(
-        app,
-        "pause-resume",
-        if state.paused { "Resume" } else { "Pause" },
-        can_pause,
-        None::<&str>,
-    )?;
-    let review = MenuItem::with_id(app, "review", "Review issues", review_pending, None::<&str>)?;
+    menu.append(&show)?;
+    for connection in manager.view().connections {
+        let item = MenuItem::with_id(
+            app,
+            format!("connection:{}", connection.id),
+            format!(
+                "{} — {}",
+                connection.name,
+                status_label(connection.view.status)
+            ),
+            true,
+            None::<&str>,
+        )?;
+        menu.append(&item)?;
+    }
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(
-        app,
-        &[
-            &status,
-            &show,
-            &open_local,
-            &open_drive,
-            &sync,
-            &pause,
-            &review,
-            &separator,
-            &quit,
-        ],
-    )
+    menu.append(&separator)?;
+    menu.append(&quit)?;
+    Ok(menu)
 }
 
-pub(crate) fn update_tray(app: &tauri::AppHandle, runtime: &Runtime) {
+pub(crate) fn update_tray(app: &tauri::AppHandle, _runtime: &Runtime) {
+    let manager = app.state::<ConnectionManager>();
     if let Some(tray) = app.tray_by_id("drive-tray") {
-        let _ = tray.set_tooltip(Some(tray_tooltip(runtime)));
-        if let Ok(menu) = build_tray_menu(app, runtime) {
+        let _ = tray.set_tooltip(Some(tray_tooltip(&manager)));
+        if let Ok(menu) = build_tray_menu(app, &manager) {
             let _ = tray.set_menu(Some(menu));
         }
     }
@@ -170,43 +146,72 @@ pub(super) fn run_from_args() -> i32 {
 
 fn run(_instance_lease: instance_lock::DesktopInstanceLease) -> i32 {
     let runtime = match Runtime::new() {
-        Ok(runtime) => runtime,
+        Ok(runtime) => Arc::new(runtime),
         Err(error) => {
             eprintln!("ShellX Drive Desktop could not load its non-secret state: {error}");
             return 1;
         }
     };
-    runtime.reconcile_launch_at_login();
-    if let Err(error) =
-        crate::application::update_service::reconcile_desktop_update_restart(&runtime)
+    let manager = match ConnectionManager::load(Arc::clone(&runtime), Runtime::load_connection) {
+        Ok(manager) => manager,
+        Err(error) => {
+            eprintln!("ShellX Drive Desktop could not load its server connections: {error}");
+            return 1;
+        }
+    };
+    if let Err(error) = runtime
+        .platform
+        .set_launch_at_login(manager.preferences().launch_at_login)
     {
-        eprintln!("ShellX Drive Desktop could not reconcile its pending update restart: {error}");
+        runtime.coordinator.record_error(format!(
+            "Drive could not restore its launch-at-sign-in registration: {error}"
+        ));
+        let _ = runtime.save();
     }
     // A pending-candidate slot can represent a write that completed just
     // before a provider error or process crash. Reconcile it before allowing
     // automatic sync to use any canonical credential.
-    runtime.set_candidate_recovery_pending(true);
-    // An interrupted Disconnect owns the exact candidate and canonical slots
-    // already captured in its durable cleanup journal. Startup recovery must
-    // not promote or remove one of those slots outside that journal.
-    let disconnect_cleanup_pending = runtime
-        .coordinator
-        .snapshot()
-        .has_pending_disconnect_cleanup();
-    if !disconnect_cleanup_pending && recover_staged_candidates_before_polling(&runtime).is_err() {
-        runtime
+    for runtime in manager.all_runtimes() {
+        if let Err(error) =
+            crate::application::update_service::reconcile_desktop_update_restart(&runtime)
+        {
+            eprintln!("ShellX Drive Desktop could not reconcile a connection's pending update restart: {error}");
+        }
+        runtime.set_candidate_recovery_pending(true);
+        // An interrupted Disconnect owns the exact candidate and canonical slots
+        // already captured in its durable cleanup journal. Startup recovery must
+        // not promote or remove one of those slots outside that journal.
+        let disconnect_cleanup_pending = runtime
             .coordinator
-            .record_error(CANDIDATE_RECOVERY_PAUSED_ERROR);
-        let _ = runtime.save();
+            .snapshot()
+            .has_pending_disconnect_cleanup();
+        if !disconnect_cleanup_pending
+            && recover_staged_candidates_before_polling(&runtime).is_err()
+        {
+            runtime
+                .coordinator
+                .record_error(CANDIDATE_RECOVERY_PAUSED_ERROR);
+            let _ = runtime.save();
+        }
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(runtime)
+        .manage(manager)
         .manage(PendingDesktopUpdate::default())
         .invoke_handler(tauri::generate_handler![
             super::super::commands::get_desktop_view,
+            super::super::connection_commands::get_connections_view,
+            super::super::connection_commands::begin_connection,
+            super::super::connection_commands::complete_connection,
+            super::super::connection_commands::save_connection,
+            super::super::connection_commands::save_app_preferences,
+            super::super::connection_commands::cancel_login,
+            super::super::connection_commands::cancel_connection,
+            super::super::connection_commands::remove_connection,
+            super::super::connection_commands::replace_connection_folder,
             super::super::desktop_agent::set_desktop_agent_control,
             super::super::commands::validate_server,
             login_password,
@@ -231,8 +236,8 @@ fn run(_instance_lease: instance_lock::DesktopInstanceLease) -> i32 {
         ])
         .setup(move |app| {
             let handle = app.handle();
-            let runtime = handle.state::<Runtime>();
-            let menu = build_tray_menu(handle, &runtime)?;
+            let manager = handle.state::<ConnectionManager>();
+            let menu = build_tray_menu(handle, &manager)?;
             TrayIconBuilder::with_id("drive-tray")
                 .menu(&menu)
                 .icon(
@@ -241,73 +246,59 @@ fn run(_instance_lease: instance_lock::DesktopInstanceLease) -> i32 {
                         .cloned()
                         .expect("ShellX Drive tray icon is bundled"),
                 )
-                .tooltip(tray_tooltip(&runtime))
+                .tooltip(tray_tooltip(&manager))
                 .show_menu_on_left_click(false)
                 .build(app)?;
-            if !runtime.candidate_recovery_pending()
-                && runtime.coordinator.snapshot().pair.is_some()
-            {
-                start_polling(handle, &runtime);
-                // Startup is an authority boundary too: refresh roots now
-                // rather than leaving a revoked retained tree eligible for
-                // the poll interval. The poller remains the periodic path.
-                let startup = handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = startup.state::<Runtime>();
-                    let state = runtime.coordinator.snapshot();
-                    let result = if state.reviews.is_empty() {
-                        sync_now_impl(&startup, &runtime).await
-                    } else {
-                        recheck_reviews_impl(&startup, &runtime, false).await
-                    };
-                    if let Err(error) = result {
-                        eprintln!("ShellX Drive startup root refresh did not complete: {error}");
-                    }
-                });
+            for connection_runtime in manager.all_runtimes() {
+                if connection_runtime.coordinator.snapshot().pair.is_some()
+                    && manager.may_sync(&connection_runtime)
+                {
+                    super::super::desktop_agent::start_polling(handle, &connection_runtime);
+                }
+                if !connection_runtime.candidate_recovery_pending()
+                    && connection_runtime.coordinator.snapshot().pair.is_some()
+                    && manager.may_sync(&connection_runtime)
+                {
+                    start_polling(handle, &connection_runtime);
+                    // Startup is an authority boundary too: refresh roots now
+                    // rather than leaving a revoked retained tree eligible for
+                    // the poll interval. The poller remains the periodic path.
+                    let startup = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let runtime = connection_runtime;
+                        let state = runtime.coordinator.snapshot();
+                        let result = if state.reviews.is_empty() {
+                            sync_now_impl(&startup, &runtime).await
+                        } else {
+                            recheck_reviews_impl(&startup, &runtime, false).await
+                        };
+                        if let Err(error) = result {
+                            eprintln!(
+                                "ShellX Drive startup root refresh did not complete: {error}"
+                            );
+                        }
+                    });
+                }
             }
-            super::super::desktop_agent::start_polling(handle, &runtime);
             super::super::desktop_agent::resume_agent_disconnect_completion(handle);
             Ok(())
         })
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "quit" => app.exit(0),
-            "show" => show_main_window(app),
-            "review" => show_reviews(app),
-            "open-local" => {
-                let _ = open_pair_local_root(app);
-            }
-            "open-drive" => {
-                let _ = open_pair_server(app);
-            }
-            "pause-resume" => {
-                let handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = handle.state::<Runtime>();
-                    if let Err(error) = toggle_paused_state(&runtime).await {
-                        eprintln!("ShellX Drive tray pause did not complete: {error}");
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            match id {
+                "quit" => app.exit(0),
+                "show" => show_main_window(app),
+                _ => {
+                    if let Some(connection_id) = id.strip_prefix("connection:") {
+                        show_main_window(app);
+                        let _ = app.emit_to(
+                            "main",
+                            "shellx-drive-open-connection",
+                            connection_id.to_string(),
+                        );
                     }
-                    update_tray(&handle, &runtime);
-                });
+                }
             }
-            "sync-now" => {
-                let handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = handle.state::<Runtime>();
-                    if let Err(error) = sync_now_impl(&handle, &runtime).await {
-                        eprintln!("ShellX Drive tray sync did not complete: {error}");
-                    }
-                });
-            }
-            "recheck-reviews" => {
-                let handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = handle.state::<Runtime>();
-                    if let Err(error) = recheck_reviews_impl(&handle, &runtime, true).await {
-                        eprintln!("ShellX Drive tray review recheck did not complete: {error}");
-                    }
-                });
-            }
-            _ => {}
         })
         .on_tray_icon_event(|app, event| {
             if matches!(
@@ -331,31 +322,4 @@ fn show_main_window(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
-}
-
-fn show_reviews(app: &tauri::AppHandle) {
-    show_main_window(app);
-    let _ = app.emit_to("main", "shellx-drive-open-reviews", ());
-}
-
-fn open_pair_local_root(app: &tauri::AppHandle) -> CoreResult<()> {
-    let runtime = app.state::<Runtime>();
-    let pair = runtime
-        .coordinator
-        .snapshot()
-        .pair
-        .ok_or(DesktopError::NeedsSetup)?;
-    runtime.platform.open_local_root(&pair.local_root)?;
-    Ok(())
-}
-
-fn open_pair_server(app: &tauri::AppHandle) -> CoreResult<()> {
-    let runtime = app.state::<Runtime>();
-    let pair = runtime
-        .coordinator
-        .snapshot()
-        .pair
-        .ok_or(DesktopError::NeedsSetup)?;
-    runtime.platform.open_drive_url(&pair.server_url)?;
-    Ok(())
 }

@@ -1,4 +1,9 @@
 mod credential_keys;
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+mod durable_keys;
+
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+pub(crate) use durable_keys::{canonical_credential_identity, pending_credential_slot};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux", test))]
 pub(crate) use credential_keys::ServiceCredentialKey;

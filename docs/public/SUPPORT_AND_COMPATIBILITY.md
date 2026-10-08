@@ -6,11 +6,12 @@ and evaluation.
 
 ## Supported features and runtime requirements
 
-| Area | Included in v0.1.11 | Requirements and actions |
+| Area | Included | Requirements and actions |
 | --- | --- | --- |
 | Server | One self-hosted Linux x86-64 server managed with systemd. | Use the authenticated release package and follow [First install](FIRST_INSTALL.md). The host needs standard installer tools and a compatible system runtime. Keep the server on loopback behind an HTTPS reverse proxy that you administer. |
 | Browser app | File management, previews, guest links, guest uploads, account security, backups, and server administration. | Files are server-readable to support these features. Encrypt locally before upload when you want to keep a payload confidential from the host. |
-| Desktop sync | One signed-in server/account connection with one chosen local base folder and up to 100 accessible roots below it. | Use **Disconnect this PC** before changing server or account. |
+| Desktop sync | Multiple independent server/account connections, including distinct accounts on the same server, with up to 100 accessible roots per connection. | Give each connection a dedicated empty ordinary local base folder through **Browse…**. Manage its sign-in, folder, settings, and removal from its server details. |
+| Desktop preferences and history | Shared appearance and launch preferences, default and per-connection sync check intervals, clickable local folder paths, and combined History with filters, search, and paging. | Save app preferences on first launch, then use **Servers → Add server**. Renew sign-in with the current server password; enter a second factor when requested. |
 | Windows desktop | The shared desktop application has an NSIS package for Windows x86-64. | Verify the signed release installer against its release manifest and publisher identity. |
 | macOS desktop | The shared desktop application has macOS arm64 package, signing, notarization, and updater routes. | Use only a Developer-ID-signed, notarized, and stapled release package. |
 | Linux desktop | The shared desktop application has Linux x86-64 AppImage/Debian package and updater routes. | Use a signed release package with GTK 3, WebKitGTK 4.1, an AppIndicator tray runtime, and a Secret Service desktop session. |
@@ -29,7 +30,8 @@ and evaluation.
   from the host.
 - Run one Drive process for each data directory. Active request, backup, and
   restore limits are process-local in v0.1.1.
-- Review and approve a signed desktop update locally. An authenticated account
+- Use **Download and install** in **App settings** to approve the exact displayed
+  signed desktop update. An authenticated account
   owner or their account-wide delegated agent can also command an enrolled desktop to install
   an exact checked, signed candidate through their authenticated authorization.
   Grant desktop-agent access only to operators you trust with that choice.

@@ -22,21 +22,9 @@ pub(super) async fn recover_staged_candidates(
     if let Some(record) = candidate_recovery_locator(state) {
         runtime.remember_candidate_recovery_record(record);
     }
-    let expired_candidate = state
-        .pending_candidate_session
-        .as_ref()
-        .is_some_and(|record| record.expires_at <= Utc::now());
-    if expired_candidate {
-        // Retain the original locator in memory when persistence fails so the
-        // recovery latch can still admit the one exact same-identity login.
-        let mut persisted = state.clone();
-        persisted.prune_remote_sessions(Utc::now());
-        runtime.store.save(&persisted)?;
-        *state = persisted;
-    } else {
-        state.prune_remote_sessions(Utc::now());
-    }
-    let mut candidates = staged_candidates(runtime)?;
+    // Expiry ends remote authority, but the exact locator still owns a local
+    // staged slot. Retain it until exact deletion/readback is confirmed.
+    let mut candidates = staged_candidates(runtime, state)?;
     let unrecorded_candidate = state.pending_candidate_session.clone().filter(|record| {
         !candidates
             .iter()
@@ -64,6 +52,12 @@ pub(super) async fn recover_staged_candidates(
         )
     });
     for candidate in candidates {
+        if !runtime.owns_session_identity(&candidate.slot.identity) {
+            // A duplicate sign-in can retain only its newly issued staged
+            // session. Its canonical identity belongs to another runtime.
+            retire_unpromoted_candidate(runtime, state, &candidate).await?;
+            continue;
+        }
         match staged_candidate_recovery_action(
             state,
             &candidate.slot.identity.server_url,
@@ -86,21 +80,18 @@ pub(super) async fn recover_staged_candidates(
     Ok(())
 }
 
-fn staged_candidates(runtime: &Runtime) -> CoreResult<Vec<StagedCandidate>> {
-    PendingWindowsCredentialStore::service_account_keys()
-        .map_err(|_| recovery_error())?
-        .into_iter()
-        .map(|account_key| {
-            let slot = SessionIdentity::parse_pending_service_key(&account_key)
-                .ok_or_else(recovery_error)?;
+fn staged_candidates(runtime: &Runtime, state: &DesktopState) -> CoreResult<Vec<StagedCandidate>> {
+    let mut candidates = Vec::new();
+    for slot in pending_session_retirement::owned_pending_slots(state)? {
+        if let Some(bearer_token) = PendingWindowsCredentialStore
+            .get(&slot.account_key)
+            .map_err(|_| recovery_error())?
+        {
             runtime.remember_candidate_recovery_identity(&slot.identity);
-            let bearer_token = PendingWindowsCredentialStore
-                .get(&slot.account_key)
-                .map_err(|_| recovery_error())?
-                .ok_or_else(recovery_error)?;
-            Ok(StagedCandidate { slot, bearer_token })
-        })
-        .collect()
+            candidates.push(StagedCandidate { slot, bearer_token });
+        }
+    }
+    Ok(candidates)
 }
 
 fn canonical_candidate_state(

@@ -20,7 +20,7 @@ pub(super) async fn check_desktop_update(
 #[tauri::command]
 pub(super) async fn install_desktop_update(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    runtime: State<'_, std::sync::Arc<Runtime>>,
     service: State<'_, PendingDesktopUpdate>,
     candidate_id: String,
     events: Channel<DesktopUpdateEvent>,

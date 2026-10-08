@@ -5,9 +5,14 @@ use super::*;
 #[tauri::command]
 pub(super) async fn select_pair(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     pair_id: String,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     select_pair_impl(&app, &runtime, pair_id).await
 }
 
@@ -16,6 +21,9 @@ pub(crate) async fn select_pair_impl(
     runtime: &Runtime,
     pair_id: String,
 ) -> Result<DesktopView, String> {
+    app.state::<ConnectionManager>()
+        .ensure_mutation_allowed()
+        .map_err(user_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(user_error)?;

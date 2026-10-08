@@ -95,32 +95,52 @@ The desktop keeps bearer sessions only in the current user's protected
 operating-system credential store: Windows Credential Manager, macOS Keychain,
 or the Linux Secret Service. Its ordinary state may retain a bounded non-secret
 session inventory containing only canonical server/account identity, session
-ID, and expiry. Candidate credentials use a separate fixed platform store until
-exact readback proves canonical publication; bearer values never enter
+ID, and expiry. Candidate credentials use separate connection-owned platform
+slots until exact readback proves canonical publication; bearer values never enter
 serializable state. Startup reconciles an interrupted candidate before polling,
 and ambiguous reads fail closed without deleting either possible authorizer.
 
-One signed-in server/account has one local Drive base folder. The user pages
-through available roots and explicitly selects a first root and any later
-additions. Up to 100 configured roots have safely named child folders beneath
-that base. Each configured root has its own baseline, activity, reviews, access
-state, and local directory identity. Refresh revalidates configured roots only;
-new shares do not create local folders until selected. The root whose details
-are currently shown in the desktop UI is not a sync selector. Duplicate remote
-roots, overlapping local paths, and reuse of one v0.1 connection state with
-another server or account are rejected. Named multi-Drive profiles for separate
-cloud or local-network servers/accounts, each with its own named local base,
-are planned after v0.1.1 and are not implied by this automatic-root model.
+The desktop maintains a durable connection catalog with opaque connection IDs.
+Each verified server/account owns an independent runtime, protected session,
+local Drive base folder, pause state, root baselines, cursors, reviews, activity,
+and remote-agent enrollment. Multiple servers and distinct accounts on the same
+server can remain active together. Adding a duplicate verified server/account
+resolves to its saved connection. Upgrading an existing desktop retains its
+original state, paths, sign-in, history, launch preference, and enrollment.
 
-Disconnect first persists a bounded, non-secret journal of every configured
-location marker and the typed canonical/candidate credential slots. If remote retirement
-cannot be confirmed, the pair and credentials remain intact, sync/setup are
-blocked, and the desktop shows one explicit remote-retirement retry. Only after
-every known remote session is revoked or already invalid does Drive persist the
-disconnected projection and remove the exact marker and credential slots. Each
-local cleanup acknowledgement is saved independently, so a crash resumes only
-the unfinished exact operations. Disconnect preserves the sync root and
-ordinary user files.
+The user pages through available roots and explicitly selects a first root and
+any later additions. Each connection supports up to 100 configured roots with
+safely named child folders beneath its base. Every root keeps its own access
+state and local directory identity. Refresh revalidates configured roots;
+new grants become available for explicit selection. Selecting a server or root
+changes the displayed details while configured, unpaused connections continue
+syncing. Physical folder admission reserves separate, non-overlapping ordinary
+local containers across connections, including paused and recovering entries.
+
+Appearance, launch at login, the default sync check interval, and desktop
+updates belong to the app. Each connection can inherit the default or override
+it with 20 seconds, 1 minute, 5 minutes, 15 minutes, 30 minutes, or 1 hour.
+Automatic checks wait for their interval after the preceding pass finishes;
+offline retries wait at least one minute. Independent schedulers share bounded,
+fair sync capacity while preserving per-connection serialization. The History
+tab combines activity with connection/account, time-frame, search, and paging
+controls. Folder paths open their associated connection's local base directly.
+
+Updating sign-in renews the saved server/account's session while preserving
+its folder and sync state. Replacing a folder prepares and saves a complete
+fresh sync candidate in a new empty separate base before publishing it. The
+connection keeps its identity, activity, pause state, and enrollment, and old
+user files remain at their original location.
+
+Removing a server first persists a bounded, non-secret journal for that
+connection's configured location markers and exact canonical/candidate
+credential slots. Drive stops its active sync safely and confirms remote
+retirement before removing its saved binding. An incomplete retirement retains
+the connection state and offers an explicit retry. Each local cleanup
+acknowledgement is saved independently, so a restart resumes the unfinished
+operations. Removal preserves ordinary user files, other connections, and app
+preferences. An approved desktop update coordinates all connection runtimes
+before handing the verified package to the device's installer.
 
 The first-release principal is creator-owned and portable across the folders
 that creator is allowed to share. Human workspace membership and the worker's

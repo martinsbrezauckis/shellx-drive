@@ -8,7 +8,7 @@ use shellx_drive_desktop_core::{
     StateStore,
 };
 
-use super::{pairing::enable_launch_at_login_after_pair, Runtime};
+use super::Runtime;
 
 struct RollbackFailingPlatform {
     credentials: FakeCredentialStore,
@@ -49,28 +49,55 @@ impl crate::platform::PlatformServices for RollbackFailingPlatform {
 }
 
 #[test]
-fn pairing_retains_rollback_repair_error_and_stops_before_sync() {
-    let directory = tempfile::tempdir().expect("temporary state directory");
-    let not_a_directory = directory.path().join("state-parent");
-    std::fs::write(&not_a_directory, b"regular file blocks state directory")
-        .expect("fixture state parent");
-    let calls = Arc::new(Mutex::new(Vec::new()));
-    let runtime = Runtime::from_loaded_state(
-        Box::new(RollbackFailingPlatform {
-            credentials: FakeCredentialStore::default(),
-            calls: Arc::clone(&calls),
-        }),
-        StateStore::new(not_a_directory.join("state.json")),
-        DesktopState::default(),
-    );
-    let mut candidate = DesktopState::default();
-
-    assert!(!enable_launch_at_login_after_pair(&runtime, &mut candidate));
-    assert_eq!(*calls.lock().expect("autostart calls"), vec![true, false]);
-    assert!(!candidate.launch_at_login);
-    let error = candidate.last_error.as_deref().expect("repair error");
-    assert!(error.contains("persistence and rollback failures"));
-    assert!(error.contains("fixture rollback failed"));
+fn folder_materialization_retains_saved_startup_and_pause_choices() {
+    use shellx_drive_desktop_core::{SyncRoot, SyncRootKind, SyncRootRole};
+    let root = SyncRoot {
+        id: "workspace:one".to_string(),
+        kind: SyncRootKind::Workspace,
+        workspace_id: "one".to_string(),
+        root_file_id: None,
+        grant_id: None,
+        owner_label: "Owner".to_string(),
+        role: SyncRootRole::Owner,
+        access_generation: 1,
+        expires_at: None,
+        label: "Files".to_string(),
+    };
+    for launch_at_login in [false, true] {
+        let directory = tempfile::tempdir().expect("temporary Drive folder");
+        // macOS exposes its temporary directory through /var, a symlink to
+        // /private/var. Native root guards require the physical parent chain.
+        let base = directory
+            .path()
+            .canonicalize()
+            .expect("physical Drive folder");
+        let mut candidate = DesktopState {
+            launch_at_login,
+            paused: true,
+            sync_root_base: Some(base.clone()),
+            ..DesktopState::default()
+        };
+        super::pairing::materialize_roots(
+            &mut candidate,
+            std::slice::from_ref(&root),
+            &crate::session_identity::SessionIdentity::new(
+                "https://drive.example.test",
+                "owner@example.test",
+            ),
+            "https://drive.example.test",
+            &base,
+        )
+        .unwrap();
+        assert_eq!(candidate.launch_at_login, launch_at_login);
+        assert!(candidate.paused);
+        assert_eq!(candidate.pair_count(), 1);
+        assert!(candidate
+            .pair
+            .as_ref()
+            .unwrap()
+            .local_root
+            .starts_with(&base));
+    }
 }
 
 #[test]

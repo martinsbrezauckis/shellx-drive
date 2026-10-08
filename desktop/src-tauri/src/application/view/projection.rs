@@ -19,7 +19,10 @@ impl Runtime {
     pub(crate) fn view(&self) -> DesktopView {
         self.view_from_coordinator_snapshot(self.coordinator.view_snapshot())
     }
-    fn view_from_coordinator_snapshot(&self, snapshot: CoordinatorViewSnapshot) -> DesktopView {
+    pub(crate) fn view_from_coordinator_snapshot(
+        &self,
+        snapshot: CoordinatorViewSnapshot,
+    ) -> DesktopView {
         let status = status_code(self.status_for_view_snapshot(&snapshot));
         let credential_recovery_pending = self.candidate_recovery_pending();
         let state = snapshot.state;

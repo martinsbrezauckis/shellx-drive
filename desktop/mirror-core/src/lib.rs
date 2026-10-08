@@ -39,6 +39,9 @@ mod sync_roots;
 mod uninstall_offboarding;
 mod uninstall_readiness;
 
+#[cfg(target_os = "macos")]
+pub use paths::protect_new_private_staging_file;
+
 pub use auth_attempts::AuthAttemptEpoch;
 pub use auth_offboarding::AuthOffboardingGate;
 pub use bounded_io::{
@@ -73,8 +76,9 @@ pub use credentials::{
     WindowsDesktopAgentDisconnectCredentialStore,
 };
 pub use desktop_agent::{
-    desktop_agent_disconnect_credential_key, desktop_agent_enrollment_fingerprint,
-    desktop_agent_pair_fingerprint, product_label, review_cursor,
+    desktop_agent_device_credential_key, desktop_agent_disconnect_credential_key,
+    desktop_agent_enrollment_fingerprint, desktop_agent_pair_fingerprint, product_label,
+    review_cursor, validate_desktop_agent_device_credential_key,
     validate_disconnect_completion_capability, validate_page_result, DesktopAgentAbandonmentReason,
     DesktopAgentClaim, DesktopAgentClaimPayload, DesktopAgentCommand,
     DesktopAgentCommandJournalEntry, DesktopAgentCommandJournalState, DesktopAgentCommandKind,
@@ -130,6 +134,8 @@ pub use model::{
     SyncStatus, WindowsDirectoryIdentity, CANDIDATE_RECOVERY_PAUSED_ERROR, STATUS_STATES,
 };
 pub use pair_profiles::{sync_pair_id, MAX_SYNC_PAIRS};
+#[cfg(target_os = "windows")]
+pub use paths::windows_absolute_path_wide;
 pub use paths::{
     capture_local_operation_boundary, download_staging_root, ensure_empty_local_root,
     ensure_local_operation_boundary, ensure_single_linked_regular_file, ensure_tree_has_no_links,

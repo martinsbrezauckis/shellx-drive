@@ -8,7 +8,9 @@ use super::{startup::set_windows_startup, *};
 pub(super) fn verify_disconnected_and_remove_startup() -> CoreResult<()> {
     let store = StateStore::new(default_state_path()?);
     let state = store.load()?;
-    if !state.uninstall_cleanup_ready()
+    let primary = Arc::new(uninstall_runtime(store, state)?);
+    let manager = ConnectionManager::load_without_credential_migration(primary, uninstall_runtime)?;
+    if manager.has_unavailable_connections() || manager.all_runtimes().iter().any(|runtime| !runtime.coordinator.snapshot().uninstall_cleanup_ready())
         || !WindowsCredentialStore::service_account_keys()?.is_empty()
         || !PendingWindowsCredentialStore::service_account_keys()?.is_empty()
         || !shellx_drive_desktop_core::WindowsDesktopAgentCredentialStore::service_account_keys()?
@@ -21,4 +23,14 @@ pub(super) fn verify_disconnected_and_remove_startup() -> CoreResult<()> {
         ));
     }
     set_windows_startup(false)
+}
+
+fn uninstall_runtime(store: StateStore, state: DesktopState) -> CoreResult<Runtime> {
+    // The package-removal path inspects durable state only. Do not invoke the
+    // normal runtime factory, which may resume credential or marker cleanup.
+    Ok(Runtime::from_loaded_state(
+        Box::new(crate::platform::windows::WindowsPlatformServices::default()),
+        store,
+        state,
+    ))
 }

@@ -9,7 +9,6 @@ use std::{
     fs,
     mem::size_of,
     os::windows::{
-        ffi::OsStrExt,
         fs::{MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
@@ -191,24 +190,13 @@ fn private_security_attributes(
     Ok((descriptor, attributes))
 }
 
-fn path_wide(path: &Path) -> Result<Vec<u16>> {
-    let mut wide = path.as_os_str().encode_wide().collect::<Vec<_>>();
-    if wide.contains(&0) {
-        return Err(DesktopError::UnsafePath(
-            "private staging path contains a NUL".to_string(),
-        ));
-    }
-    wide.push(0);
-    Ok(wide)
-}
-
 /// Create a private staging directory in one kernel operation.  Existing
 /// paths are never adopted here; callers validate them independently.
 pub(super) fn create_private_directory(path: &Path) -> Result<()> {
     let acl = private_acl(INHERIT_TO_CHILDREN)?;
     let (mut descriptor, mut attributes) = private_security_attributes(&acl)?;
     attributes.lpSecurityDescriptor = (&mut descriptor as *mut SecurityDescriptor).cast();
-    let wide = path_wide(path)?;
+    let wide = super::windows_absolute_path_wide(path)?;
     if unsafe { CreateDirectoryW(wide.as_ptr(), &attributes) } == 0 {
         let error = unsafe { GetLastError() };
         return if error == ERROR_ALREADY_EXISTS {

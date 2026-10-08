@@ -1,10 +1,14 @@
 //! Remote session retirement shared by Unix Disconnect and uninstall.
 
-use std::{collections::BTreeSet, future::Future};
+use std::collections::BTreeSet;
 
 use shellx_drive_desktop_core::{
-    CredentialStore, DesktopError, DesktopState, DriveHttpClient, LogoutOutcome,
-    RemoteSessionRecord, RemoteSessionRevocationOutcome, Result as CoreResult, StateStore,
+    CredentialStore, DesktopError, DesktopState, DriveHttpClient, Result as CoreResult, StateStore,
+};
+
+#[cfg(test)]
+use shellx_drive_desktop_core::{
+    LogoutOutcome, RemoteSessionRecord, RemoteSessionRevocationOutcome,
 };
 
 #[cfg(target_os = "linux")]
@@ -16,17 +20,29 @@ use shellx_drive_desktop_core::{
     MacOsCredentialStore as CanonicalStore, PendingMacOsCredentialStore as PendingStore,
 };
 
-use crate::session_identity::SessionIdentity;
+use crate::session_identity::{
+    canonical_credential_identity, pending_credential_slot, SessionIdentity,
+};
 
+#[cfg(test)]
+mod identity_tests;
+mod retirement;
 #[cfg(all(test, target_os = "linux"))]
 mod tests;
+use retirement::retire_stored_sessions;
 
 /// Retire remote sessions before a Unix caller deletes local state.
 pub(crate) async fn retire_remote_credentials(
     store: &StateStore,
     state: &mut DesktopState,
 ) -> CoreResult<()> {
-    let stored = load_stored_credentials()?;
+    if state
+        .pending_disconnect_cleanup()
+        .is_some_and(|cleanup| cleanup.remote_retirement_confirmed())
+    {
+        return Ok(());
+    }
+    let stored = load_stored_credentials(state)?;
     if stored.is_empty()
         && (state.pair.is_some()
             || state.active_remote_session.is_some()
@@ -63,72 +79,6 @@ pub(crate) async fn retire_remote_credentials(
     .await
 }
 
-async fn retire_stored_sessions<Revoke, RevokeFuture, Logout, LogoutFuture>(
-    store: &StateStore,
-    state: &mut DesktopState,
-    stored: &[StoredCredential],
-    mut revoke: Revoke,
-    mut logout: Logout,
-) -> CoreResult<()>
-where
-    Revoke: FnMut(&StoredCredential, &RemoteSessionRecord) -> RevokeFuture,
-    RevokeFuture: Future<Output = CoreResult<RemoteSessionRevocationOutcome>>,
-    Logout: FnMut(&StoredCredential) -> LogoutFuture,
-    LogoutFuture: Future<Output = CoreResult<LogoutOutcome>>,
-{
-    let direct_sessions = direct_sessions(state, stored);
-    let records = state
-        .pending_remote_revocations
-        .iter()
-        .chain(state.pending_candidate_session.iter())
-        .chain(state.active_remote_session.iter())
-        .cloned()
-        .collect::<Vec<_>>();
-    for record in records {
-        if direct_sessions.contains(&record.session_id) {
-            continue;
-        }
-        let actor = stored
-            .iter()
-            .find(|credential| {
-                credential.identity.credential_key()
-                    == SessionIdentity::new(&record.server_url, &record.account_email)
-                        .credential_key()
-            })
-            .ok_or_else(|| {
-                DesktopError::Credential(
-                    "a saved remote session has no same-account retirement bearer; credentials were kept"
-                        .to_string(),
-                )
-            })?;
-        match revoke(actor, &record).await? {
-            RemoteSessionRevocationOutcome::Revoked
-            | RemoteSessionRevocationOutcome::AlreadyAbsent => {
-                state.remove_remote_session_record(&record);
-                store.save(state)?;
-            }
-        }
-    }
-    for credential in stored {
-        match logout(credential).await? {
-            LogoutOutcome::Revoked | LogoutOutcome::AlreadyInvalid => {
-                remove_direct_session_record(state, credential);
-                store.save(state)?;
-            }
-        }
-    }
-    if state.pending_candidate_session.is_some()
-        || state.active_remote_session.is_some()
-        || !state.pending_remote_revocations.is_empty()
-    {
-        return Err(DesktopError::Credential(
-            "not every saved Drive session reached confirmed remote retirement; credentials were kept"
-                .to_string(),
-        ));
-    }
-    Ok(())
-}
-
 async fn revoke_desktop_agent_device(
     store: &StateStore,
     state: &mut DesktopState,
@@ -153,8 +103,11 @@ async fn revoke_desktop_agent_device(
     let owner = stored
         .iter()
         .find(|credential| {
-            credential.identity.credential_key()
-                == SessionIdentity::new(&pair.server_url, &pair.account_email).credential_key()
+            credential.identity.server_url == pair.server_url.trim_end_matches('/')
+                && credential
+                    .identity
+                    .email
+                    .eq_ignore_ascii_case(pair.account_email.trim())
         })
         .ok_or_else(|| {
             DesktopError::Credential(
@@ -170,43 +123,47 @@ async fn revoke_desktop_agent_device(
     store.save(state)
 }
 
-fn load_stored_credentials() -> CoreResult<Vec<StoredCredential>> {
+fn load_stored_credentials(state: &DesktopState) -> CoreResult<Vec<StoredCredential>> {
+    load_stored_credentials_from(state, &CanonicalStore, &PendingStore)
+}
+
+fn load_stored_credentials_from(
+    state: &DesktopState,
+    canonical: &dyn CredentialStore,
+    pending: &dyn CredentialStore,
+) -> CoreResult<Vec<StoredCredential>> {
+    use shellx_drive_desktop_core::DisconnectCredentialNamespace;
+    let intent = state.pending_disconnect_cleanup().ok_or_else(|| {
+        DesktopError::InvalidState(
+            "Remote retirement requires the exact connection cleanup journal.".into(),
+        )
+    })?;
     let mut stored = Vec::new();
-    for key in CanonicalStore::service_account_keys()? {
-        let identity = SessionIdentity::parse_canonical_credential_key(&key).ok_or_else(|| {
-            DesktopError::Credential(
-                "a saved Drive credential has an invalid identity; credentials were kept"
-                    .to_string(),
-            )
-        })?;
-        let token = CanonicalStore.get(&key)?.ok_or_else(|| {
-            DesktopError::Credential(
-                "a saved Drive credential could not be read; credentials were kept".to_string(),
-            )
-        })?;
-        stored.push(StoredCredential {
-            identity,
-            token,
-            session_id: None,
-        });
-    }
-    for key in PendingStore::service_account_keys()? {
-        let slot = SessionIdentity::parse_pending_service_key(&key).ok_or_else(|| {
-            DesktopError::Credential(
-                "a staged Drive credential has an invalid identity; credentials were kept"
-                    .to_string(),
-            )
-        })?;
-        let token = PendingStore.get(&key)?.ok_or_else(|| {
-            DesktopError::Credential(
-                "a staged Drive credential could not be read; credentials were kept".to_string(),
-            )
-        })?;
-        stored.push(StoredCredential {
-            identity: slot.identity,
-            token,
-            session_id: Some(slot.session_id),
-        });
+    for slot in &intent.credential_slots {
+        match slot.namespace {
+            DisconnectCredentialNamespace::Canonical => {
+                let identity = canonical_credential_identity(state, &slot.account_key)?;
+                if let Some(token) = canonical.get(&slot.account_key)? {
+                    stored.push(StoredCredential {
+                        identity,
+                        token,
+                        session_id: None,
+                    });
+                }
+            }
+            DisconnectCredentialNamespace::PendingCandidate => {
+                let locator = pending_credential_slot(state, &slot.account_key)?;
+                if let Some(token) = pending.get(&slot.account_key)? {
+                    stored.push(StoredCredential {
+                        identity: locator.identity,
+                        token,
+                        session_id: Some(locator.session_id),
+                    });
+                }
+            }
+            DisconnectCredentialNamespace::DesktopAgentDevice
+            | DisconnectCredentialNamespace::DesktopAgentDeviceScoped => {}
+        }
     }
     Ok(stored)
 }

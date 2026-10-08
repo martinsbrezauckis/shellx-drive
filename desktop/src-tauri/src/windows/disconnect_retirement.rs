@@ -10,7 +10,7 @@ pub(super) async fn retire_stored_credentials_for_disconnect(
     state: &mut DesktopState,
     fallback: Option<&SessionIdentity>,
 ) -> CoreResult<()> {
-    let stored = stored_session_credentials(runtime, fallback)?;
+    let stored = stored_session_credentials(runtime, state, fallback)?;
     if stored.is_empty() && fallback.is_some() {
         return Err(DesktopError::Credential(
             "the saved Drive session has no retrievable credential; pair was kept for retry"
@@ -28,9 +28,6 @@ pub(super) async fn retire_stored_credentials_for_disconnect(
     // durable locator into the ordinary retirement queue before declaring the
     // remote phase complete. A staged candidate with a matching bearer is in
     // `direct_records` and therefore remains assigned to its exact logout.
-    if let Some(candidate) = state.pending_candidate_session.take() {
-        state.record_pending_remote_revocation(candidate, Utc::now());
-    }
     // Retire every older session while its matching bearer remains valid. The
     // direct session tied to each local bearer is instead confirmed by logout,
     // whose AlreadyInvalid outcome makes a save-failure retry safe.
@@ -58,7 +55,6 @@ pub(super) async fn retire_stored_credentials_for_disconnect(
         runtime.store.save(state)?;
     }
 
-    state.prune_remote_sessions(Utc::now());
     state.active_remote_session = None;
     // The caller first persists a non-secret exact local-cleanup journal.
     // Credential Manager and pair-marker removal happen only after the

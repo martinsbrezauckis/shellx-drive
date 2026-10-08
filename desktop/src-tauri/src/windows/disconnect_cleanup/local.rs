@@ -35,13 +35,39 @@ pub(crate) fn persist_disconnect_cleanup_intent(
     }
     let intent = DisconnectCleanupIntent::for_disconnect_pairs(
         state.pairs().cloned().collect(),
-        WindowsCredentialStore::disconnect_credential_slots()?,
+        scoped_credential_slots(runtime, state)?,
     )?;
     let mut next = state.clone();
     next.begin_disconnect_cleanup(intent)?;
     runtime.store.save(&next)?;
     *state = next;
     Ok(())
+}
+
+pub(crate) fn scoped_credential_slots(
+    runtime: &Runtime,
+    state: &DesktopState,
+) -> CoreResult<Vec<shellx_drive_desktop_core::DisconnectCredentialSlot>> {
+    use shellx_drive_desktop_core::{DisconnectCredentialNamespace, DisconnectCredentialSlot};
+    let session = runtime.session.lock().expect("session lock").clone();
+    let canonical =
+        pending_session_retirement::owned_canonical_keys(runtime, state, session.as_ref())
+            .into_iter()
+            .map(|account_key| DisconnectCredentialSlot {
+                namespace: DisconnectCredentialNamespace::Canonical,
+                account_key,
+            });
+    let pending = pending_session_retirement::owned_pending_slots(state)?
+        .into_iter()
+        .map(|slot| DisconnectCredentialSlot {
+            namespace: DisconnectCredentialNamespace::PendingCandidate,
+            account_key: slot.account_key,
+        });
+    let agent = crate::application::desktop_agent::scoped_device_cleanup_slot(state)?.into_iter();
+    let mut slots = canonical.chain(pending).chain(agent).collect::<Vec<_>>();
+    slots.sort();
+    slots.dedup();
+    Ok(slots)
 }
 
 /// Save progress only after the exact local side effect succeeded. The working

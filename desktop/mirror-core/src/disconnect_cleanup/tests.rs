@@ -116,3 +116,6 @@ fn cleanup_intent_rejects_empty_or_cross_namespace_ambiguous_slots() {
 
 #[path = "tests/locations.rs"]
 mod locations;
+
+#[path = "tests/device_credentials.rs"]
+mod device_credentials;

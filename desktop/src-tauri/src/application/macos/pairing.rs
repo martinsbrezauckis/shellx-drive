@@ -1,26 +1,56 @@
 //! Authoritative root discovery, safe local materialization, and location
 //! selection for macOS.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
     converge_sync_roots, ensure_empty_local_root, plan_local_root_locations,
-    plan_selected_root_location, sync_pair_id, DesktopState, DriveHttpClient, PairMarker, SyncPair,
-    SyncRoot,
+    plan_selected_root_location, sync_pair_id, DesktopState, DriveHttpClient, PairMarker,
+    PairMarkerDisposition, SyncPair, SyncRoot,
 };
 use tauri::State;
 
 use super::*;
+use crate::platform::unix::filesystem::UnixRootGuard;
 use crate::{
     application::sync_terminal::session::admit_user_session_response,
     session_identity::SessionIdentity,
 };
 
+mod replacement;
+pub(crate) use replacement::replace_folder_impl;
+
 #[tauri::command]
 pub(super) async fn start_pair(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
+    workspace_id: String,
+    remote_root_id: Option<String>,
+    sync_root_id: String,
+    local_root: String,
+) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
+    start_pair_impl(
+        &app,
+        &runtime,
+        &manager,
+        workspace_id,
+        remote_root_id,
+        sync_root_id,
+        local_root,
+    )
+    .await
+}
+
+pub(crate) async fn start_pair_impl(
+    app: &tauri::AppHandle,
+    runtime: &Arc<Runtime>,
+    manager: &ConnectionManager,
     workspace_id: String,
     remote_root_id: Option<String>,
     sync_root_id: String,
@@ -79,7 +109,6 @@ pub(super) async fn start_pair(
         .begin_lifecycle_operation()
         .map_err(macos_error)?;
     let current = runtime.coordinator.snapshot();
-    let was_first_pair = current.pair_count() == 0;
     if let Some(existing) = current.sync_root_base.as_ref() {
         if existing != &base {
             return Err(
@@ -91,17 +120,32 @@ pub(super) async fn start_pair(
         ensure_empty_local_root(&base).map_err(macos_error)?;
     }
 
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "Drive connection is no longer registered.".to_string())?;
+    let admission = manager.admission.lock().await;
+    if current.pair_count() == 0 {
+        manager
+            .validate_local_folder(&id, &base)
+            .map_err(macos_error)?;
+    } else {
+        manager
+            .validate_add_root_folder(&id, &base)
+            .map_err(macos_error)?;
+    }
+    let base_guard = UnixRootGuard::acquire(&base, None).map_err(macos_error)?;
     let mut candidate = current;
     candidate.sync_root_base = Some(base.clone());
     candidate
         .record_selected_sync_root(&roots[0])
         .map_err(macos_error)?;
-    let created = materialize_roots(
+    let created = materialize_roots_with_guard(
         &mut candidate,
         &roots,
         &session,
         client.normalized_url(),
         &base,
+        &base_guard,
     )
     .map_err(macos_error)?;
     let selected_pair_id = candidate
@@ -115,9 +159,6 @@ pub(super) async fn start_pair(
     candidate
         .activate_pair(&selected_pair_id)
         .map_err(macos_error)?;
-    if was_first_pair {
-        candidate.launch_at_login = false;
-    }
     if let Err(error) = runtime.store.save(&candidate) {
         rollback_created_markers(&created);
         return Err(macos_error(error));
@@ -126,55 +167,15 @@ pub(super) async fn start_pair(
         .publish_persisted_state(candidate.clone())
         .map_err(macos_error)?;
     invalidate_pending_confirmation(&runtime);
-    if !was_first_pair {
-        operation.finish_state(candidate);
-        drop(_publication);
-        shell::update_tray(&app, &runtime);
-        return sync::sync_now_impl(&app, &runtime).await;
-    }
-    if !enable_launch_at_login_after_pair(&runtime, &mut candidate) {
-        sync::stop_polling(&runtime);
-        operation.finish_state(candidate);
-        shell::update_tray(&app, &runtime);
-        return Ok(runtime.view());
-    }
     operation.finish_state(candidate);
+    drop(admission);
     drop(_publication);
     shell::update_tray(&app, &runtime);
+    if !manager.may_sync(runtime) {
+        return Ok(runtime.view());
+    }
     sync::start_polling(&app, &runtime);
     sync::sync_now_impl(&app, &runtime).await
-}
-
-/// Enable the paired desktop's startup entry only when its enabled state can
-/// be persisted. A repair condition must remain visible instead of starting a
-/// sync that could replace it with a successful status.
-pub(super) fn enable_launch_at_login_after_pair(
-    runtime: &Runtime,
-    candidate: &mut DesktopState,
-) -> bool {
-    if let Err(error) = runtime.platform.set_launch_at_login(true) {
-        candidate.last_error = Some(format!(
-            "Drive locations were paired, but macOS launch-at-login could not be enabled: {error}"
-        ));
-        let _ = runtime.store.save(candidate);
-        return false;
-    }
-    candidate.launch_at_login = true;
-    if let Err(error) = runtime.store.save(candidate) {
-        let rollback = runtime.platform.set_launch_at_login(false);
-        candidate.launch_at_login = false;
-        candidate.last_error = Some(match rollback {
-            Ok(()) => format!(
-                "Drive locations were paired, but the macOS launch-at-login preference could not be saved: {error}"
-            ),
-            Err(rollback_error) => format!(
-                "Drive locations were paired, but macOS launch-at-login needs repair after persistence and rollback failures: {error}; {rollback_error}"
-            ),
-        });
-        let _ = runtime.store.save(candidate);
-        return false;
-    }
-    true
 }
 
 /// Refresh only configured root authority. Newly available locations require
@@ -222,9 +223,14 @@ pub(crate) async fn refresh_authorized_roots(runtime: &Runtime) -> CoreResult<()
 #[tauri::command]
 pub(super) async fn select_pair(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     pair_id: String,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     select_pair_impl(&app, &runtime, pair_id).await
 }
 
@@ -274,15 +280,26 @@ pub(crate) async fn select_pair_impl(
     Ok(runtime.view())
 }
 
-fn materialize_roots(
+pub(super) fn materialize_roots(
     state: &mut shellx_drive_desktop_core::DesktopState,
     discovered: &[SyncRoot],
     session: &SessionIdentity,
     server_url: &str,
     base: &std::path::Path,
 ) -> CoreResult<Vec<SyncPair>> {
+    let base_guard = UnixRootGuard::acquire(base, None)?;
+    materialize_roots_with_guard(state, discovered, session, server_url, base, &base_guard)
+}
+
+fn materialize_roots_with_guard(
+    state: &mut DesktopState,
+    discovered: &[SyncRoot],
+    session: &SessionIdentity,
+    server_url: &str,
+    base: &std::path::Path,
+    base_guard: &UnixRootGuard,
+) -> CoreResult<Vec<SyncPair>> {
     let roots = converge_sync_roots(discovered)?;
-    let base_guard = crate::platform::unix::filesystem::UnixRootGuard::acquire(base, None)?;
     let mut created = Vec::new();
     let locations = if roots.len() == 1 {
         vec![plan_selected_root_location(state, &roots[0], base)?]
@@ -300,8 +317,17 @@ fn materialize_roots(
             continue;
         }
         let local_root = base.join(&location.relative_path);
-        let root_guard = base_guard.ensure_child_root(&location.relative_path)?;
-        root_guard.ensure_empty_root()?;
+        let root_guard = match base_guard.ensure_child_root(&location.relative_path) {
+            Ok(guard) => guard,
+            Err(error) => {
+                rollback_created_markers(&created);
+                return Err(error);
+            }
+        };
+        if let Err(error) = root_guard.ensure_empty_root() {
+            rollback_created_markers(&created);
+            return Err(error);
+        }
         let pair = SyncPair {
             server_url: server_url.to_string(),
             account_email: session.email.clone(),
@@ -312,20 +338,30 @@ fn materialize_roots(
             local_root: local_root.clone(),
             local_root_identity: Some(root_guard.identity().clone()),
         };
-        base_guard.write_or_recognize_child_pair_marker(
+        let disposition = match base_guard.write_or_recognize_child_pair_marker(
             &location.relative_path,
             &root_guard,
             &PairMarker::from(&pair),
-        )?;
+        ) {
+            Ok(disposition) => disposition,
+            Err(error) => {
+                rollback_created_markers(&created);
+                return Err(error);
+            }
+        };
         if let Err(error) = state
             .configure_pair(pair.clone())
             .and_then(|()| state.record_sync_root(&pair, root.clone()))
         {
-            let _ = root_guard.remove_exact_pair_marker(&PairMarker::from(&pair));
+            if disposition == PairMarkerDisposition::Created {
+                let _ = root_guard.remove_exact_pair_marker(&PairMarker::from(&pair));
+            }
             rollback_created_markers(&created);
             return Err(error);
         }
-        created.push(pair);
+        if disposition == PairMarkerDisposition::Created {
+            created.push(pair);
+        }
     }
     Ok(created)
 }

@@ -15,10 +15,11 @@ Obtain these items from the Drive service owner or the official release:
 - an existing Drive account, with first-administrator setup completed in the
   browser when setting up a new server.
 
-Prepare one dedicated empty ordinary local folder (the **Drive folder**),
-separate from other sync tools' folders. Drive creates safely named owned and
-shared-root folders below this one base. Pairing requires an empty base,
-preserving pre-existing data. Files inside managed roots must be independent
+Prepare a dedicated empty ordinary local folder (the **Drive folder**) for each
+connection, separate from other connections and other sync tools' folders.
+Drive creates safely named owned and shared-root folders below each base.
+Pairing requires an empty base, preserving pre-existing data. Files inside
+managed roots must be independent
 regular files. Symbolic links, reparse points, and filesystem hard links remain
 in **Needs review** until replaced with ordinary copied files for syncing.
 
@@ -33,38 +34,66 @@ in **Needs review** until replaced with ordinary copied files for syncing.
    WebView2 is absent, so initial installation may need network access.
 4. Launch **ShellX Drive Desktop** from the installed shortcut.
 
-## Connect and pair
+## Add a server connection
 
-1. Enter the server's HTTPS URL and select **Validate**. If Drive says owner
-   setup is required, complete first-administrator setup in the browser before
-   continuing.
-2. Enter email and password. A TOTP or recovery-code field appears only when the
-   account requires it.
-3. Browse the owned and shared Drive roots by page and select the first root
+1. On first launch, choose **App preferences**: appearance, **Launch at login**,
+   and the **Default sync check interval**. Select **Save and continue**.
+2. In **Servers**, select **Add server**. Enter a friendly name and the server's
+   HTTPS URL, then select **Validate server**. If Drive says owner setup is
+   required, complete first-administrator setup in the browser before continuing.
+3. Enter **Account email** and **Server password**. Use your current password,
+   including the new password after a change or reset on the server. A TOTP or
+   recovery-code field appears only when the account requires it.
+4. Browse the owned and shared Drive roots by page and select the first root
    to sync. Additional roots require an explicit **Add Drive root** choice.
-4. Select the prepared empty local Drive folder with **Choose folder** and
-   confirm pairing. Choose the path through the native folder picker.
-5. Wait for **Synced**, then create one small test file on each side and verify
-   both arrive with the expected name and bytes.
+5. Select **Browse…** to choose the prepared empty local Drive folder through
+   the native folder picker. Choose a **Sync check interval** or **Use app
+   default**, then select **Connect and start syncing**.
+6. Wait for **Synced**, then check a small file's name and bytes. Viewer roots
+   support downloads; editable roots support both directions.
 
 Use the HTTPS origin as the server URL. Enter credentials only in the sign-in
 fields and share only the non-secret support information listed below.
 
-## One connection and managed Drive roots
+## Manage connections and Drive roots
 
-v0.1 connects one signed-in server and account to one local Drive folder. Browse
-available owned and shared roots by page, select the first root, then use
-**Add Drive root** for more. Up to 100 selected locations have non-overlapping
+Connect multiple servers, including distinct accounts on the same server. Each
+connection has its own friendly name, local Drive folder, sign-in, sync settings,
+and status. Signing in to an already connected server/account offers **Open
+existing connection**.
+
+Select a server to manage it. Use **Edit server** to rename it, change its sync
+check interval, or choose a new empty local folder with **Browse…**. Confirm the
+fresh sync before saving: files stay in the old folder, and Drive starts syncing
+in the new folder. Resolve pending file reviews before replacing a folder. Use
+**Update sign-in** to renew that same account's session while retaining its
+folder and sync settings.
+
+Each connection supports up to 100 selected locations with non-overlapping
 child folders, each with its own baseline, activity, review state, and access
-status. **Current status details** shows one configured root; all configured
-roots continue syncing.
+status. Use **Add Drive root** for more. Selecting a server or a root changes the
+displayed details; all configured, unpaused connections continue syncing.
 
 - Select a new grant in the root picker to create its local folder. Revoked
   configured roots stop syncing and retain local bytes.
-- Drive creates each shared root's safe child folder below the one local Drive
-  folder chosen during setup.
-- Use **Disconnect this PC** before connecting the client to another
-  server/account.
+- Click a folder path in **Servers** to open that connection's local folder,
+  including while paused or awaiting sign-in. **Open folder** in the details
+  opens the same local Drive folder, containing its managed root folders.
+- Upgrading an existing setup retains its sign-in, local folders, history,
+  pause state, launch preference, and remote-agent enrollment.
+
+## App settings and history
+
+**App settings** controls appearance, **Launch at login**, and the default sync
+check interval. The initial interval is **20 seconds**; choose 20 seconds,
+1 minute, 5 minutes, 15 minutes, 30 minutes, or 1 hour. A connection using
+**Use app default** follows later default changes; an explicit override keeps
+its own value. The interval is the delay between sync checks after a pass
+finishes. Offline retries wait at least one minute.
+
+The third tab, **History**, combines activity across connections. Filter by
+connection and account, time frame, or search text, and use the page controls
+to browse retained activity.
 
 ## Understand status
 
@@ -72,22 +101,21 @@ roots continue syncing.
 | --- | --- |
 | **Synced** | The last complete comparison converged. |
 | **Syncing** | A serialized sync pass is active; wait for it to finish. |
-| **Paused** | Automatic transfers are paused; select **Resume** when ready. |
+| **Paused** | Automatic transfers are paused; select **Resume sync** when ready. |
 | **Offline** | Local edits remain local; restore network and use **Retry now**. |
-| **Needs reconnect** | Sign in again. Pairing and local files are retained. |
+| **Needs reconnect** | Select **Reconnect** to sign in again. Pairing and local files are retained. |
 | **Needs review** | Drive detected a conflict, deletion, or unsafe path. Choose the explicit review action. |
 | **Error** | Follow the displayed bounded recovery step. Destructive choices require explicit review confirmation. |
 
-Drive polls conservatively. Use **Sync now** and
-wait for the terminal status before shutting down or editing the same file on a
+Use **Sync now** and wait for the terminal status before shutting down or
+editing the same file on a
 second device.
 
 ## Desktop updates
 
 The desktop app checks the official signed update manifest after launch. A
-new version is shown in **Settings → Desktop update**. Select **Review update**
-to see the target version and signature trust guidance, then select
-**Download and install** to approve that exact
+new version, release notes, and signature trust guidance appear in **App
+settings**. Select **Download and install** there to approve the exact displayed
 update. An authenticated account owner or their account-wide delegated agent
 can also request installation of an exact checked, signed candidate through an
 enrolled desktop agent. The owner's or delegate's authenticated request
@@ -108,17 +136,19 @@ Simultaneous edits preserve both bodies and enter **Needs review**. Deletions
 require explicit confirmation, including folder deletion. While
 offline, keep edits inside the managed local root, reconnect, and let Drive compare
 before editing the same paths elsewhere. Use the app's reconnect, review, or
-disconnect flow while preserving client state and Credential Manager entries.
+removal flow while preserving client state and Credential Manager entries.
 
-## Disconnect and uninstall
+## Remove a server and uninstall
 
-If synchronization is active, Disconnect first asks it to stop and waits for
-the current operation to finish safely before retiring the connection.
+Open the selected server's details and choose **Remove server**. Confirm the
+named server, account, and folder. Drive stops that connection's active sync
+safely before retiring its saved session.
 
-**Disconnect this PC** revokes the desktop session and removes Drive's saved
-credential only after remote retirement is confirmed. It retains the paired
-files. If the UI reports that retirement is unconfirmed, use its retry action
-while preserving the saved state.
+Removal revokes that desktop session and removes its saved credential only
+after remote retirement is confirmed. Local files stay in their folders;
+other connections and app preferences remain available. If the UI reports
+that retirement is unconfirmed, use its retry action while preserving the saved
+state. Remove each connection through this flow when retiring the whole app.
 
 The NSIS uninstaller invokes Drive's credential cleanup and aborts if that
 cleanup fails. Uninstall is intended to retain sync-root files and

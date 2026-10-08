@@ -6,7 +6,9 @@ use shellx_drive_desktop_core::{
     Result as CoreResult,
 };
 
-use super::super::{remove_exact_agent_credential, update_desktop_state, Runtime};
+use super::super::{
+    current_device_credential_key, remove_exact_agent_credential, update_desktop_state, Runtime,
+};
 
 /// The poller calls this only for an error returned by a device-bearer broker
 /// operation. It uses the independently authenticated current owner session
@@ -40,6 +42,7 @@ async fn reconcile_confirmed_external_revocation(
     runtime: &Runtime,
     device_id: &str,
 ) -> CoreResult<bool> {
+    let credential_key = current_device_credential_key(&runtime.coordinator.snapshot())?;
     let session = runtime.current_session()?;
     let owner_bearer = runtime.current_token(&session)?;
     let client = DriveHttpClient::new(&session.server_url)?;
@@ -52,7 +55,10 @@ async fn reconcile_confirmed_external_revocation(
 
     // Server confirmation is not enough by itself: do not clear durable
     // control state until the matching platform credential is absent too.
-    remove_exact_agent_credential(runtime.platform.desktop_agent_credentials(), device_id)?;
+    remove_exact_agent_credential(
+        runtime.platform.desktop_agent_credentials(),
+        &credential_key,
+    )?;
     update_desktop_state(runtime, |state| {
         Ok(clear_exact_current_device_after_confirmed_revocation(
             state, device_id, true,
@@ -70,9 +76,13 @@ fn current_enrolled_device_id(runtime: &Runtime) -> CoreResult<Option<String>> {
 
 fn current_missing_device_credential_id(runtime: &Runtime) -> CoreResult<Option<String>> {
     let state = runtime.coordinator.snapshot();
+    if !state.desktop_agent_control.enabled {
+        return Ok(None);
+    }
     missing_device_credential_id(
         &state.desktop_agent_control,
         runtime.platform.desktop_agent_credentials(),
+        &current_device_credential_key(&state)?,
     )
 }
 
@@ -95,12 +105,19 @@ fn current_enrolled_device_id_for_control(
 fn missing_device_credential_id(
     control: &DesktopAgentControlState,
     store: &dyn CredentialStore,
+    credential_key: &str,
 ) -> CoreResult<Option<String>> {
     if !control.enabled {
         return Ok(None);
     }
     let device_id = current_enrolled_device_id_for_control(control)?;
-    Ok(store.get(&device_id)?.is_none().then_some(device_id))
+    shellx_drive_desktop_core::validate_desktop_agent_device_credential_key(credential_key)?;
+    if control.credential_key.as_deref() != Some(credential_key) {
+        return Err(DesktopError::Credential(
+            "desktop-agent credential ownership recovery is pending".to_string(),
+        ));
+    }
+    Ok(store.get(credential_key)?.is_none().then_some(device_id))
 }
 
 fn clear_exact_current_device_after_confirmed_revocation(
@@ -123,93 +140,4 @@ fn is_device_bearer_unauthorized(error: &DesktopError) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use shellx_drive_desktop_core::{
-        CredentialStore, DesktopError, DesktopState, FakeCredentialStore,
-    };
-
-    use super::{
-        clear_exact_current_device_after_confirmed_revocation, is_device_bearer_unauthorized,
-        missing_device_credential_id,
-    };
-
-    #[test]
-    fn only_a_device_bearer_unauthorized_response_starts_reconciliation() {
-        assert!(is_device_bearer_unauthorized(&DesktopError::Server {
-            status: 401,
-            message: "sign-in was not accepted".to_string(),
-        }));
-        assert!(!is_device_bearer_unauthorized(&DesktopError::Server {
-            status: 403,
-            message: "the account cannot access this Drive location".to_string(),
-        }));
-        assert!(!is_device_bearer_unauthorized(&DesktopError::Server {
-            status: 409,
-            message: "Drive changed this item before the update could be applied".to_string(),
-        }));
-    }
-
-    #[test]
-    fn missing_credential_after_an_unsaved_clear_retries_only_when_revocation_is_confirmed() {
-        let store = FakeCredentialStore::default();
-        let mut persisted = DesktopState::default();
-        persisted
-            .desktop_agent_control
-            .enroll("device_current".to_string(), None, "a".repeat(64))
-            .unwrap();
-        persisted
-            .record_desktop_update_restart_for_agent(
-                "1.2.3".to_string(),
-                "candidate_current".to_string(),
-                "command_current".to_string(),
-            )
-            .unwrap();
-        store.set("device_current", "sxd_device_fixture").unwrap();
-        store.delete("device_current").unwrap();
-
-        // This models the post-delete state-save failure/crash: the secret is
-        // gone but the last durable state is still enabled on the next start.
-        assert_eq!(
-            missing_device_credential_id(&persisted.desktop_agent_control, &store).unwrap(),
-            Some("device_current".to_string())
-        );
-        let mut unsaved_attempt = persisted.clone();
-        assert!(clear_exact_current_device_after_confirmed_revocation(
-            &mut unsaved_attempt,
-            "device_current",
-            true
-        ));
-        assert!(persisted.desktop_agent_control.enabled);
-        assert!(persisted.pending_desktop_update_restart.is_some());
-
-        assert!(!clear_exact_current_device_after_confirmed_revocation(
-            &mut persisted,
-            "device_other",
-            true
-        ));
-        assert!(persisted.pending_desktop_update_restart.is_some());
-
-        // A missing credential with a live/other server readback is not a
-        // revocation confirmation and must retain the durable enrollment.
-        assert!(!clear_exact_current_device_after_confirmed_revocation(
-            &mut persisted,
-            "device_current",
-            false
-        ));
-        assert_eq!(
-            persisted.desktop_agent_control.device_id.as_deref(),
-            Some("device_current")
-        );
-        assert!(persisted.pending_desktop_update_restart.is_some());
-
-        assert!(clear_exact_current_device_after_confirmed_revocation(
-            &mut persisted,
-            "device_current",
-            true
-        ));
-        assert!(!persisted.desktop_agent_control.enabled);
-        assert!(persisted.desktop_agent_control.device_id.is_none());
-        assert!(persisted.desktop_agent_control.command_journal.is_empty());
-        assert!(persisted.pending_desktop_update_restart.is_none());
-    }
-}
+mod tests;

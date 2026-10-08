@@ -15,7 +15,7 @@ use super::{
     device_number, directory_identity, ensure_identity, mkdir_at, open_directory_at, UnixRootGuard,
 };
 
-#[cfg(all(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 unsafe fn errno_slot() -> *mut libc::c_int {
     libc::__errno_location()
 }
@@ -165,7 +165,6 @@ pub(crate) fn write_or_recognize_child_pair_marker_with_hook<F: FnOnce()>(
     Ok(disposition)
 }
 
-#[cfg(any(target_os = "macos", test))]
 pub(crate) fn ensure_empty_root(guard: &UnixRootGuard) -> CoreResult<()> {
     let descriptor = unsafe { libc::dup(guard.root.as_raw_fd()) };
     if descriptor < 0 {

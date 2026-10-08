@@ -5,7 +5,10 @@
 //! directory and marker change below that selected directory goes through the
 //! Unix descriptor guard; no Tauri command turns a text path into a mutation.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
@@ -13,21 +16,22 @@ use shellx_drive_desktop_core::{
     plan_selected_root_location, sync_pair_id, DesktopError, DesktopState, DriveHttpClient,
     PairMarker, PairMarkerDisposition, Result as CoreResult, SyncPair, SyncRoot,
 };
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::{
     application::{
-        invalidate_pending_confirmation,
-        sync_terminal::session::{
-            admit_user_session_response, admit_user_session_response_during_publication,
-        },
-        DesktopView, Runtime,
+        connections::ConnectionManager, invalidate_pending_confirmation,
+        sync_terminal::session::admit_user_session_response_during_publication, DesktopView,
+        Runtime,
     },
     platform::unix::filesystem::UnixRootGuard,
     session_identity::SessionIdentity,
 };
 
 use super::{shell::update_tray, sync};
+
+mod replacement;
+pub(crate) use replacement::replace_folder_impl;
 
 /// Refresh root authority without changing the native-picked base directory.
 pub(crate) async fn refresh_authorized_roots(runtime: &Runtime) -> CoreResult<()> {
@@ -68,7 +72,33 @@ pub(crate) async fn refresh_authorized_roots(runtime: &Runtime) -> CoreResult<()
 #[tauri::command]
 pub(super) async fn start_pair(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
+    workspace_id: String,
+    remote_root_id: Option<String>,
+    sync_root_id: String,
+    local_root: String,
+) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
+    start_pair_impl(
+        &app,
+        &runtime,
+        &manager,
+        workspace_id,
+        remote_root_id,
+        sync_root_id,
+        local_root,
+    )
+    .await
+}
+
+pub(crate) async fn start_pair_impl(
+    app: &AppHandle,
+    runtime: &Arc<Runtime>,
+    manager: &ConnectionManager,
     workspace_id: String,
     remote_root_id: Option<String>,
     sync_root_id: String,
@@ -90,12 +120,15 @@ pub(super) async fn start_pair(
         .begin_lifecycle_operation()
         .map_err(present_error)?;
     let current = runtime.coordinator.snapshot();
-    let was_first_pair = current.pair_count() == 0;
 
     // This is emitted only by the native folder dialog. Requiring an existing
     // empty, link-free folder prevents a guessed or existing sync tree from
     // being repurposed as a new base.
     let base = PathBuf::from(local_root.trim());
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "Drive connection is no longer registered.".to_string())?;
+    validate_pair_base(manager, &id, &current, &base).map_err(present_error)?;
     if current
         .sync_root_base
         .as_ref()
@@ -114,7 +147,7 @@ pub(super) async fn start_pair(
     let token = runtime.current_token(&session).map_err(present_error)?;
     let client = DriveHttpClient::new(&session.server_url).map_err(present_error)?;
     let selected = admit_user_session_response_during_publication(
-        &runtime,
+        runtime,
         &session,
         &token,
         client
@@ -128,7 +161,7 @@ pub(super) async fn start_pair(
     )
     .map_err(present_error)?;
     let selected_manifest = admit_user_session_response_during_publication(
-        &runtime,
+        runtime,
         &session,
         &token,
         client.sync_root_manifest(&token, &selected).await,
@@ -143,6 +176,17 @@ pub(super) async fn start_pair(
     runtime
         .require_captured_setup_session_during_publication(&session, &token)
         .map_err(present_error)?;
+
+    // Serialize cross-connection folder admission only while publishing
+    // native folder bindings. The network responses above hold no global
+    // folder lock; recheck the physical directory immediately before use.
+    let _admission = manager.admission.lock().await;
+    validate_pair_base(manager, &id, &current, &base).map_err(present_error)?;
+    let base_guard =
+        UnixRootGuard::acquire(&base, Some(base_guard.identity())).map_err(present_error)?;
+    if current.sync_root_base.is_none() {
+        base_guard.ensure_empty_root().map_err(present_error)?;
+    }
 
     let mut candidate = current;
     if candidate.sync_root_base.is_none() {
@@ -172,9 +216,6 @@ pub(super) async fn start_pair(
     candidate
         .activate_pair(&selected_pair_id)
         .map_err(present_error)?;
-    if was_first_pair {
-        candidate.launch_at_login = false;
-    }
     if let Err(error) = runtime.store.save(&candidate) {
         rollback_created_markers(&created);
         return Err(present_error(error));
@@ -182,31 +223,28 @@ pub(super) async fn start_pair(
     operation
         .publish_persisted_state(candidate.clone())
         .map_err(present_error)?;
-    invalidate_pending_confirmation(&runtime);
-    if !was_first_pair {
-        operation.finish_state(candidate);
-        drop(_publication);
-        update_tray(&app, &runtime);
-        return sync::sync_or_recheck(&app, &runtime, false).await;
-    }
-    if !enable_launch_at_login_after_pair(&runtime, &mut candidate) {
-        operation.finish_state(candidate);
-        update_tray(&app, &runtime);
+    invalidate_pending_confirmation(runtime);
+    operation.finish_state(candidate);
+    drop(_admission);
+    drop(_publication);
+    update_tray(app, runtime);
+    if !manager.may_sync(runtime) {
         return Ok(runtime.view());
     }
-    operation.finish_state(candidate);
-    drop(_publication);
-    update_tray(&app, &runtime);
-    sync::start_polling(&app, &runtime);
-    sync::sync_or_recheck(&app, &runtime, false).await
+    sync::start_polling(app, runtime);
+    sync::sync_or_recheck(app, runtime, false).await
 }
 
 #[tauri::command]
 pub(super) async fn select_pair(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     pair_id: String,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     select_pair_impl(&app, &runtime, pair_id).await
 }
 
@@ -232,6 +270,15 @@ pub(crate) async fn select_pair_impl(
         .find(|pair| sync_pair_id(pair) == pair_id.trim())
         .cloned()
         .ok_or_else(|| "That Drive location is no longer configured.".to_string())?;
+    let manager = app.state::<ConnectionManager>();
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "Drive connection is no longer registered.".to_string())?;
+    let _admission = manager.admission.lock().await;
+    manager
+        .validate_existing_connection_folder(&id, &selected.local_root)
+        .map_err(present_error)?;
     let guard = UnixRootGuard::acquire(&selected.local_root, selected.local_root_identity.as_ref())
         .map_err(present_error)?;
     guard
@@ -252,6 +299,19 @@ pub(crate) async fn select_pair_impl(
     update_tray(app, runtime);
     sync::start_polling(app, runtime);
     Ok(runtime.view())
+}
+
+fn validate_pair_base(
+    manager: &ConnectionManager,
+    id: &str,
+    state: &DesktopState,
+    base: &Path,
+) -> CoreResult<()> {
+    if state.sync_root_base.is_some() {
+        manager.validate_add_root_folder(id, base)
+    } else {
+        manager.validate_local_folder(id, base)
+    }
 }
 
 fn materialize_discovered_roots(
@@ -384,37 +444,6 @@ fn rollback_created_markers(created: &[SyncPair]) {
 
 fn present_error(error: DesktopError) -> String {
     error.to_string()
-}
-
-/// Enable the paired desktop's startup entry only when its enabled state can
-/// be persisted. A repair condition must stop any retained poller before the
-/// lifecycle reservation is released, so a successful poll cannot hide it.
-fn enable_launch_at_login_after_pair(runtime: &Runtime, candidate: &mut DesktopState) -> bool {
-    if let Err(error) = runtime.platform.set_launch_at_login(true) {
-        candidate.last_error = Some(format!(
-            "Drive locations were paired, but Linux launch-at-sign-in could not be enabled: {error}"
-        ));
-        let _ = runtime.store.save(candidate);
-        sync::stop_polling(runtime);
-        return false;
-    }
-    candidate.launch_at_login = true;
-    if let Err(error) = runtime.store.save(candidate) {
-        let rollback = runtime.platform.set_launch_at_login(false);
-        candidate.launch_at_login = false;
-        candidate.last_error = Some(match rollback {
-            Ok(()) => format!(
-                "Drive locations were paired, but the Linux launch-at-sign-in preference could not be saved: {error}"
-            ),
-            Err(rollback_error) => format!(
-                "Drive locations were paired, but Linux launch-at-sign-in needs repair after persistence and rollback failures: {error}; {rollback_error}"
-            ),
-        });
-        let _ = runtime.store.save(candidate);
-        sync::stop_polling(runtime);
-        return false;
-    }
-    true
 }
 
 #[cfg(test)]

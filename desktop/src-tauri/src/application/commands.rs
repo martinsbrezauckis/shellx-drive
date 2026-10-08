@@ -9,7 +9,7 @@ use shellx_drive_desktop_core::{DesktopError, DriveHttpClient, Result as CoreRes
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
-use super::{DesktopView, Runtime};
+use super::{ConnectionManager, DesktopView, Runtime};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,15 +33,25 @@ pub(crate) async fn validate_current_server(runtime: &Runtime) -> CoreResult<Ser
 }
 
 #[tauri::command]
-pub(crate) fn get_desktop_view(runtime: State<'_, Runtime>) -> DesktopView {
-    runtime.view()
+pub(crate) fn get_desktop_view(
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
+) -> Result<DesktopView, String> {
+    Ok(manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?
+        .view())
 }
 
 #[tauri::command]
 pub(crate) async fn validate_server(
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     server_url: String,
 ) -> Result<ServerReply, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(present_error)?;
@@ -86,17 +96,32 @@ async fn await_folder_choice(
 
 #[tauri::command]
 pub(crate) async fn set_launch_at_login(
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
     enabled: bool,
 ) -> Result<DesktopView, String> {
-    persist_launch_at_login_state(&runtime, enabled)
-        .await
+    let runtime = manager.app_service_runtime();
+    let saved = super::connection_commands::persist_launch_preference(&manager, enabled)
         .map_err(present_error)?;
-    Ok(runtime.view())
+    let mut view = runtime.view();
+    view.launch_at_login = saved.preferences.launch_at_login;
+    Ok(view)
 }
 
 #[tauri::command]
-pub(crate) fn open_local_folder(runtime: State<'_, Runtime>) -> Result<DesktopView, String> {
+pub(crate) fn open_local_folder(
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
+) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
+    if let Some(base) = runtime.coordinator.snapshot().sync_root_base {
+        runtime
+            .platform
+            .open_local_root(&base)
+            .map_err(present_error)?;
+        return Ok(runtime.view());
+    }
     let pair = runtime
         .coordinator
         .snapshot()
@@ -110,7 +135,13 @@ pub(crate) fn open_local_folder(runtime: State<'_, Runtime>) -> Result<DesktopVi
 }
 
 #[tauri::command]
-pub(crate) fn open_drive(runtime: State<'_, Runtime>) -> Result<DesktopView, String> {
+pub(crate) fn open_drive(
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
+) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     let pair = runtime
         .coordinator
         .snapshot()

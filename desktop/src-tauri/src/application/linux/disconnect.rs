@@ -2,13 +2,15 @@
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
-    DesktopError, DesktopState, DisconnectCleanupIntent, DisconnectCredentialSlot,
-    LinuxCredentialStore, Result as CoreResult, StateStore,
+    DesktopError, DesktopState, DisconnectCleanupIntent, DisconnectCredentialNamespace,
+    DisconnectCredentialSlot, LinuxCredentialStore, Result as CoreResult, StateStore,
 };
 use tauri::{AppHandle, State};
 
 use crate::{
-    application::{invalidate_pending_confirmation, DesktopView, Runtime},
+    application::{
+        connections::ConnectionManager, invalidate_pending_confirmation, DesktopView, Runtime,
+    },
     platform::unix::filesystem::UnixRootGuard,
 };
 
@@ -28,7 +30,6 @@ pub(super) fn resume_linux_disconnect_cleanup(
         .is_some_and(DisconnectCleanupIntent::remote_retirement_confirmed)
         && state.pair.is_none()
     {
-        crate::platform::unix::remove_owned_launch_at_login()?;
         complete_local_cleanup(store, state)?;
     }
     Ok(())
@@ -37,8 +38,13 @@ pub(super) fn resume_linux_disconnect_cleanup(
 #[tauri::command]
 pub(super) async fn disconnect(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     disconnect_impl(&app, &runtime).await
 }
 
@@ -115,7 +121,6 @@ pub(crate) async fn disconnect_impl(
             })?
             .confirm_remote_retirement();
         disconnected = disconnected.into_disconnected(Utc::now());
-        disconnected.launch_at_login = false;
         runtime.store.save(&disconnected).map_err(present_error)?;
         operation
             .publish_persisted_state(disconnected.clone())
@@ -123,15 +128,6 @@ pub(crate) async fn disconnect_impl(
         state = disconnected;
         *runtime.session.lock().expect("session lock") = None;
         invalidate_pending_confirmation(runtime);
-    }
-    if let Err(error) = runtime.platform.set_launch_at_login(false) {
-        state.last_error = Some(format!(
-            "Disconnect retired remote access but Linux autostart cleanup needs retry: {error}"
-        ));
-        let _ = runtime.store.save(&state);
-        operation.finish_state(state);
-        update_tray(app, runtime);
-        return Err(present_error(error));
     }
     if let Err(error) = complete_local_cleanup(&runtime.store, &mut state) {
         operation.finish_state(state);
@@ -153,13 +149,42 @@ fn persist_intent(runtime: &Runtime, state: &mut DesktopState) -> CoreResult<()>
     }
     let intent = DisconnectCleanupIntent::for_disconnect_pairs(
         state.pairs().cloned().collect(),
-        LinuxCredentialStore::disconnect_credential_slots()?,
+        owned_disconnect_slots(runtime, state)?,
     )?;
     let mut next = state.clone();
     next.begin_disconnect_cleanup(intent)?;
     runtime.store.save(&next)?;
     *state = next;
     Ok(())
+}
+
+fn owned_disconnect_slots(
+    runtime: &Runtime,
+    state: &DesktopState,
+) -> CoreResult<Vec<DisconnectCredentialSlot>> {
+    let pending = super::candidate::pending_locator_keys(state);
+    let agent = crate::application::desktop_agent::scoped_device_cleanup_slot(state)?;
+    Ok(LinuxCredentialStore::disconnect_credential_slots()?
+        .into_iter()
+        .filter_map(|mut slot| {
+            let owned = match slot.namespace {
+                DisconnectCredentialNamespace::Canonical => {
+                    runtime.owns_credential_key(&slot.account_key)
+                }
+                DisconnectCredentialNamespace::PendingCandidate => {
+                    pending.contains(&slot.account_key)
+                }
+                DisconnectCredentialNamespace::DesktopAgentDevice
+                | DisconnectCredentialNamespace::DesktopAgentDeviceScoped => {
+                    slot.namespace = DisconnectCredentialNamespace::DesktopAgentDeviceScoped;
+                    agent
+                        .as_ref()
+                        .is_some_and(|agent| agent.account_key == slot.account_key)
+                }
+            };
+            owned.then_some(slot)
+        })
+        .collect())
 }
 
 pub(crate) fn complete_local_cleanup(

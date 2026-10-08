@@ -194,7 +194,7 @@ fn failed_remote_retirement_keeps_canceled_locator_and_staged_bearer() {
 }
 
 #[test]
-fn failed_locator_save_keeps_staged_bearer_after_confirmed_retirement() {
+fn failed_final_save_keeps_locator_after_confirmed_remote_and_local_retirement() {
     let harness = Harness::new("canceled");
     let canceled = record("canceled");
     let mut state = DesktopState {
@@ -205,7 +205,7 @@ fn failed_locator_save_keeps_staged_bearer_after_confirmed_retirement() {
         .recover(&mut state, &harness.canonical, true, false, false)
         .is_err());
     assert_eq!(state.pending_candidate_session, Some(canceled));
-    assert_eq!(harness.staged().as_deref(), Some(BEARER));
+    assert!(harness.staged().is_none());
     assert_eq!(
         *harness.events.lock().unwrap(),
         ["retire candidate", "save"]
@@ -366,6 +366,7 @@ fn staged_slots_prioritize_exact_authoritative_candidate_and_reject_malformed_ke
     let identity = SessionIdentity::new("https://drive.example.test", "person@example.test");
     let state = DesktopState {
         pending_candidate_session: Some(record("z_fresh")),
+        pending_remote_revocations: vec![record("a_stale")],
         ..DesktopState::default()
     };
     let fresh = identity.pending_service_key("z_fresh").unwrap();
@@ -473,7 +474,7 @@ impl CredentialStore for FailedStagedDelete {
 }
 
 #[test]
-fn failed_or_uncertain_staged_deletion_keeps_bearer_after_durable_retirement() {
+fn failed_or_uncertain_staged_deletion_keeps_bearer_and_exact_locator() {
     for uncertain_readback in [false, true] {
         let harness = Harness::new("canceled");
         let pending = FailedStagedDelete {
@@ -485,8 +486,9 @@ fn failed_or_uncertain_staged_deletion_keeps_bearer_after_durable_retirement() {
             .values
             .set(&harness.slot.account_key, BEARER)
             .unwrap();
+        let canceled = record("canceled");
         let mut state = DesktopState {
-            pending_candidate_session: Some(record("canceled")),
+            pending_candidate_session: Some(canceled.clone()),
             ..DesktopState::default()
         };
         assert!(harness
@@ -501,7 +503,7 @@ fn failed_or_uncertain_staged_deletion_keeps_bearer_after_durable_retirement() {
             .is_err());
         assert!(pending.attempted.load(Ordering::Acquire));
         assert!(state.active_remote_session.is_none());
-        assert!(state.pending_candidate_session.is_none());
+        assert_eq!(state.pending_candidate_session, Some(canceled));
         assert_eq!(
             pending
                 .values
@@ -510,17 +512,7 @@ fn failed_or_uncertain_staged_deletion_keeps_bearer_after_durable_retirement() {
                 .as_deref(),
             Some(BEARER)
         );
-        assert!(harness
-            .persisted
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .pending_candidate_session
-            .is_none());
-        assert_eq!(
-            *harness.events.lock().unwrap(),
-            ["retire candidate", "save"]
-        );
+        assert!(harness.persisted.lock().unwrap().is_none());
+        assert_eq!(*harness.events.lock().unwrap(), ["retire candidate"]);
     }
 }

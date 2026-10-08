@@ -7,7 +7,7 @@ use serde::Serialize;
 use shellx_drive_desktop_core::{Result as CoreResult, SyncRoot, SyncRootKind, SyncRootRole};
 use tauri::State;
 
-use super::Runtime;
+use super::{ConnectionManager, Runtime};
 pub(crate) mod page;
 mod refresh;
 pub(crate) use refresh::discover_for_sync_refresh;
@@ -77,8 +77,12 @@ pub(crate) fn workspace_choice_counts(choices: &[WorkspaceChoice]) -> (usize, us
 
 #[tauri::command]
 pub(crate) async fn list_workspaces(
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<Vec<WorkspaceChoice>, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(|error| error.to_string())?;
     discover_workspace_choices(&runtime)
         .await
         .map_err(|error| error.to_string())
@@ -86,9 +90,13 @@ pub(crate) async fn list_workspaces(
 
 #[tauri::command]
 pub(crate) async fn list_workspace_page(
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     cursor: Option<String>,
 ) -> Result<page::WorkspaceChoicePage, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(|error| error.to_string())?;
     page::discover_workspace_choice_page(&runtime, cursor.as_deref(), 50)
         .await
         .map_err(|error| error.to_string())

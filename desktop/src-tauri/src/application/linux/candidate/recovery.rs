@@ -37,7 +37,7 @@ async fn recover(
     runtime: &Runtime,
     state: &mut shellx_drive_desktop_core::DesktopState,
 ) -> CoreResult<()> {
-    let slots = PendingLinuxCredentialStore::service_account_keys()?;
+    let slots = super::owned_pending_keys(state)?;
     if slots.is_empty() && state.pending_candidate_session.is_none() {
         return Ok(());
     }
@@ -48,6 +48,21 @@ async fn recover(
             .ok_or_else(candidate_error)?;
         let identity = &slot.identity;
         let bearer = bearer.as_str();
+        // A failed duplicate setup may retain a candidate but owns no
+        // canonical account credential. It can retire its candidate only.
+        let owns_canonical = runtime.owns_session_identity(identity);
+        if !owns_canonical {
+            DriveHttpClient::new(&identity.server_url)?
+                .logout(bearer)
+                .await
+                .map_err(|_| candidate_error())?;
+            super::super::auth::cancellation::remove_retired_candidate(
+                runtime,
+                state,
+                &slot.account_key,
+            )?;
+            continue;
+        }
         recover_slot(
             state,
             &slot,
@@ -73,7 +88,7 @@ async fn recover(
                     }
                 }
             },
-            || LinuxCredentialStore::delete_service_credentials_except(&identity.credential_key()),
+            || Ok(()),
         )
         .await?;
     }
@@ -88,19 +103,13 @@ async fn retire_prior_canonical_sessions(
     candidate: &SessionIdentity,
     candidate_bearer: &str,
 ) -> CoreResult<()> {
-    for account_key in LinuxCredentialStore::service_account_keys()? {
-        let Some(bearer) = LinuxCredentialStore.get(&account_key)? else {
-            return Err(candidate_error());
-        };
-        let identity = SessionIdentity::parse_canonical_credential_key(&account_key)
-            .ok_or_else(candidate_error)?;
-        if identity.credential_key() == candidate.credential_key() && bearer == candidate_bearer {
-            continue;
+    if let Some(bearer) = LinuxCredentialStore.get(&candidate.credential_key())? {
+        if bearer != candidate_bearer {
+            DriveHttpClient::new(&candidate.server_url)?
+                .logout(&bearer)
+                .await
+                .map_err(|_| candidate_error())?;
         }
-        DriveHttpClient::new(&identity.server_url)?
-            .logout(&bearer)
-            .await
-            .map_err(|_| candidate_error())?;
     }
     Ok(())
 }

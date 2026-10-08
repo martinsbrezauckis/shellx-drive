@@ -46,6 +46,9 @@ pub(in crate::storage) fn resolve_move_destination_in_tx(
     policy: DestinationCollisionPolicy,
     _updated_at: &str,
 ) -> ApiResult<ResolvedMoveDestination> {
+    if parent_id != source.parent_id.as_deref() {
+        super::move_depth::validate_move_depth_in_tx(tx, source, parent_id)?;
+    }
     let Some(occupied) = active_sibling_in_tx(
         tx,
         &source.workspace_id,

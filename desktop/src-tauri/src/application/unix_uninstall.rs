@@ -6,8 +6,8 @@
 //! This mode only verifies that outcome and removes owned autostart wiring.
 
 use shellx_drive_desktop_core::{
-    default_state_path, uninstall_credential_registry_empty, DesktopError, Result as CoreResult,
-    StateStore,
+    default_state_path, uninstall_credential_registry_empty, DesktopError, DesktopState,
+    Result as CoreResult, StateStore,
 };
 
 pub(crate) mod remote;
@@ -39,16 +39,35 @@ pub(crate) fn run_uninstall_cleanup_with_lease() -> i32 {
 
 fn verify_disconnected_and_remove_autostart() -> CoreResult<()> {
     let store = StateStore::new(default_state_path()?);
-    let mut state = store.load()?;
-    if !state.uninstall_cleanup_ready() || !uninstall_credential_registry_empty()? {
+    let state = store.load()?;
+    let primary = std::sync::Arc::new(read_only_runtime(store, state)?);
+    let manager =
+        super::ConnectionManager::load_without_credential_migration(primary, read_only_runtime)?;
+    if manager.has_unavailable_connections()
+        || manager
+            .all_runtimes()
+            .iter()
+            .any(|runtime| !runtime.coordinator.snapshot().uninstall_cleanup_ready())
+        || !uninstall_credential_registry_empty()?
+    {
         return Err(DesktopError::InvalidState(
-            "interactive Disconnect must finish before uninstall".to_string(),
+            "Remove every connection and finish pending recovery before uninstalling Drive.".into(),
         ));
     }
     crate::platform::unix::remove_owned_launch_at_login()?;
-    if state.launch_at_login {
-        state.launch_at_login = false;
-        store.save(&state)?;
-    }
+    let preferences = manager.preferences();
+    manager.save_preferences(
+        preferences.theme,
+        false,
+        preferences.default_sync_interval_seconds,
+    )?;
     Ok(())
+}
+
+fn read_only_runtime(store: StateStore, state: DesktopState) -> CoreResult<super::Runtime> {
+    Ok(super::Runtime::from_loaded_state(
+        Box::new(crate::platform::unix::UnixPlatformServices::default()),
+        store,
+        state,
+    ))
 }

@@ -58,7 +58,6 @@ pub(super) async fn download_snapshot(
     let staged = batch.join("payload");
     let result = async {
         let mut destination = create_download_payload(&staged)?;
-        shellx_drive_desktop_core::validate_private_staging_file(&destination)?;
         space.check_file(&destination)?;
         client
             .download_file_chunks(token, &remote.id, size, |chunk| {
@@ -74,6 +73,7 @@ pub(super) async fn download_snapshot(
                 "Drive download did not match its scoped manifest bytes".to_string(),
             ));
         }
+        shellx_drive_desktop_core::validate_private_staging_file(&destination)?;
         drop(destination);
         owned.validate_for_publication(&batch)?;
         Ok(())
@@ -95,14 +95,16 @@ pub(super) async fn download_snapshot(
 /// The download body is hashed through this same descriptor after its durable
 /// write. Keep read access explicit: a write-only Darwin descriptor reports
 /// EBADF when the bounded verifier reads it back.
-fn create_download_payload(path: &Path) -> std::io::Result<fs::File> {
-    fs::OpenOptions::new()
+fn create_download_payload(path: &Path) -> shellx_drive_desktop_core::Result<fs::File> {
+    let file = fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create_new(true)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
+        .open(path)?;
+    shellx_drive_desktop_core::protect_new_private_staging_file(&file)?;
+    Ok(file)
 }
 
 pub(super) struct UploadSnapshot {
@@ -155,7 +157,7 @@ pub(super) fn upload_snapshot(
             .mode(0o600)
             .custom_flags(libc::O_NOFOLLOW)
             .open(&payload)?;
-        shellx_drive_desktop_core::validate_private_staging_file(&destination)?;
+        shellx_drive_desktop_core::protect_new_private_staging_file(&destination)?;
         let (content_hash, copied) = copy_and_hash_reader_bounded(
             &mut source,
             &mut destination,
@@ -175,6 +177,7 @@ pub(super) fn upload_snapshot(
             ));
         }
         destination.seek(SeekFrom::Start(0))?;
+        shellx_drive_desktop_core::validate_private_staging_file(&destination)?;
         Ok((destination, snapshot))
     })();
     match result {

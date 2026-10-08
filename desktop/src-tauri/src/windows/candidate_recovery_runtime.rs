@@ -28,16 +28,10 @@ impl Runtime {
         if state_matches || remembered_matches {
             return Ok(());
         }
-        let staged_matches = PendingWindowsCredentialStore::service_account_keys()
-            .map_err(|_| candidate_recovery_error())?
-            .into_iter()
-            .map(|account_key| {
-                SessionIdentity::parse_pending_service_key(&account_key)
-                    .ok_or_else(candidate_recovery_error)
-            })
-            .collect::<CoreResult<Vec<_>>>()?
-            .iter()
-            .any(|slot| slot.identity.credential_key() == requested);
+        let staged_matches =
+            pending_session_retirement::owned_pending_slots(&self.coordinator.snapshot())?
+                .iter()
+                .any(|slot| slot.identity.credential_key() == requested);
         if state_matches || staged_matches {
             return Ok(());
         }
@@ -53,23 +47,22 @@ impl Runtime {
             self.remember_candidate_recovery_record(record);
         }
         let pending = state.pending_candidate_session.is_some()
-            || PendingWindowsCredentialStore::service_account_keys()
+            || pending_session_retirement::owned_pending_slots(&state)
                 .map(|slots| {
-                    for account_key in &slots {
-                        if let Some(slot) = SessionIdentity::parse_pending_service_key(account_key)
+                    let mut pending = false;
+                    for slot in slots {
+                        if PendingWindowsCredentialStore
+                            .get(&slot.account_key)
+                            .map(|bearer| bearer.is_some())
+                            .unwrap_or(true)
                         {
                             self.remember_candidate_recovery_identity(&slot.identity);
+                            pending = true;
                         }
                     }
-                    !slots.is_empty()
+                    pending
                 })
                 .unwrap_or(true);
         self.set_candidate_recovery_pending(pending);
     }
-}
-
-fn candidate_recovery_error() -> DesktopError {
-    DesktopError::Credential(
-        "Drive credential recovery must finish before sign-in, pairing, or sync".to_string(),
-    )
 }

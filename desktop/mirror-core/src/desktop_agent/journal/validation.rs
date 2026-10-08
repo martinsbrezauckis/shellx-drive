@@ -13,6 +13,9 @@ impl DesktopAgentControlState {
             (true, Some(device_id), Some(fingerprint)) => {
                 ensure_opaque_id("desktop-agent device ID", device_id)?;
                 ensure_fingerprint(fingerprint)?;
+                if let Some(key) = &self.credential_key {
+                    super::super::validate_desktop_agent_device_credential_key(key)?;
+                }
             }
             (true, _, _) => {
                 return Err(DesktopError::InvalidState(
@@ -20,7 +23,7 @@ impl DesktopAgentControlState {
                         .to_string(),
                 ));
             }
-            (false, None, None) => {}
+            (false, None, None) if self.credential_key.is_none() => {}
             (false, _, _) => {
                 return Err(DesktopError::InvalidState(
                     "disabled desktop-agent control must not retain device enrollment state"

@@ -1,5 +1,13 @@
 use super::*;
 
+#[path = "stored/identity.rs"]
+mod identity;
+#[cfg(test)]
+#[path = "stored/tests.rs"]
+mod tests;
+
+use identity::{invalid_saved_identity, parse_identity};
+
 #[derive(Clone)]
 pub(in crate::application) struct StoredSessionCredential {
     pub(crate) identity: SessionIdentity,
@@ -28,73 +36,81 @@ pub(super) enum CredentialNamespace {
 
 pub(in crate::application) fn stored_session_credentials(
     runtime: &Runtime,
+    state: &DesktopState,
     fallback: Option<&SessionIdentity>,
 ) -> CoreResult<Vec<StoredSessionCredential>> {
-    let canonical = WindowsCredentialStore::service_account_keys()?
+    let canonical = owned_canonical_keys(runtime, state, fallback)
         .into_iter()
         .map(|key| (CredentialNamespace::Canonical, key));
-    let pending = PendingWindowsCredentialStore::service_account_keys()?
+    let pending = owned_pending_slots(state)?
         .into_iter()
-        .map(|key| (CredentialNamespace::PendingCandidate, key));
-    canonical
-        .chain(pending)
-        .map(|(namespace, account_key)| {
-            let (identity, session_id) = parse_identity(namespace, &account_key, fallback)?;
-            let bearer_token = read_bearer(runtime, namespace, &account_key)?;
-            Ok(StoredSessionCredential {
+        .map(|slot| (CredentialNamespace::PendingCandidate, slot.account_key));
+    let mut stored = Vec::new();
+    for (namespace, account_key) in canonical.chain(pending) {
+        let (identity, session_id) = parse_identity(namespace, &account_key, fallback)?;
+        let bearer = match namespace {
+            CredentialNamespace::Canonical => runtime.platform.credentials().get(&account_key)?,
+            CredentialNamespace::PendingCandidate => {
+                PendingWindowsCredentialStore.get(&account_key)?
+            }
+        };
+        if let Some(bearer_token) = bearer {
+            stored.push(StoredSessionCredential {
                 identity,
                 session_id,
                 bearer_token,
-            })
-        })
+            });
+        }
+    }
+    Ok(stored)
+}
+
+/// Canonical ownership comes from the catalog-bound identity, never from a
+/// rejected candidate locator whose identity may belong to another runtime.
+pub(in crate::application::windows) fn owned_canonical_keys(
+    runtime: &Runtime,
+    state: &DesktopState,
+    fallback: Option<&SessionIdentity>,
+) -> std::collections::BTreeSet<String> {
+    state
+        .pairs()
+        .map(|pair| SessionIdentity::new(&pair.server_url, &pair.account_email))
+        .chain(
+            state
+                .active_remote_session
+                .iter()
+                .map(|record| SessionIdentity::new(&record.server_url, &record.account_email)),
+        )
+        .chain(
+            state
+                .pending_candidate_session
+                .iter()
+                .chain(state.pending_remote_revocations.iter())
+                .map(|record| SessionIdentity::new(&record.server_url, &record.account_email)),
+        )
+        .chain(fallback.cloned())
+        .filter(|identity| runtime.owns_session_identity(identity))
+        .map(|identity| identity.credential_key())
         .collect()
 }
 
-fn parse_identity(
-    namespace: CredentialNamespace,
-    account_key: &str,
-    fallback: Option<&SessionIdentity>,
-) -> CoreResult<(SessionIdentity, Option<String>)> {
-    match namespace {
-        CredentialNamespace::Canonical => {
-            SessionIdentity::parse_canonical_credential_key(account_key)
-                .or_else(|| {
-                    fallback
-                        .filter(|identity| identity.credential_key() == account_key)
-                        .cloned()
-                })
-                .map(|identity| (identity, None))
-                .ok_or_else(invalid_saved_identity)
-        }
-        CredentialNamespace::PendingCandidate => {
-            let pending = SessionIdentity::parse_pending_service_key(account_key)
-                .ok_or_else(invalid_saved_identity)?;
-            Ok((pending.identity, Some(pending.session_id)))
-        }
+/// Pending slots are owned by exact durable session locators, including a
+/// rejected duplicate's fresh session awaiting retirement. Do not enumerate
+/// all slots for the identity or adopt an unattributed provider slot.
+pub(in crate::application::windows) fn owned_pending_slots(
+    state: &DesktopState,
+) -> CoreResult<Vec<ServiceCredentialKey>> {
+    let mut slots = std::collections::BTreeMap::new();
+    for record in state
+        .pending_candidate_session
+        .iter()
+        .chain(state.active_remote_session.iter())
+        .chain(state.pending_remote_revocations.iter())
+    {
+        let slot = SessionIdentity::new(&record.server_url, &record.account_email)
+            .pending_service_key(&record.session_id)
+            .ok_or_else(invalid_saved_identity)?;
+        slots.insert(slot.account_key.clone(), slot);
     }
-}
-
-fn read_bearer(
-    runtime: &Runtime,
-    namespace: CredentialNamespace,
-    account_key: &str,
-) -> CoreResult<String> {
-    let bearer = match namespace {
-        CredentialNamespace::Canonical => runtime.platform.credentials().get(account_key)?,
-        CredentialNamespace::PendingCandidate => PendingWindowsCredentialStore.get(account_key)?,
-    };
-    bearer.ok_or_else(missing_saved_credential)
-}
-
-fn invalid_saved_identity() -> DesktopError {
-    DesktopError::Credential(
-        "a saved Drive credential has an invalid identity; credentials were kept for retry"
-            .to_string(),
-    )
-}
-
-fn missing_saved_credential() -> DesktopError {
-    DesktopError::Credential(
-        "a saved Drive credential could not be read; credentials were kept for retry".to_string(),
-    )
+    Ok(slots.into_values().collect())
 }

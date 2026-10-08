@@ -1256,11 +1256,7 @@ pub(super) fn ensure_windows_download_free_space(
                 "sync download free-space requirement overflowed".to_string(),
             )
         })?;
-    let wide = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
+    let wide = shellx_drive_desktop_core::windows_absolute_path_wide(path)?;
     let mut available = 0u64;
     let result = unsafe {
         GetDiskFreeSpaceExW(
@@ -1295,6 +1291,20 @@ pub(super) fn open_owned_staging(
     // before anything is deleted.
     area.cleanup_aged_batches(Duration::from_secs(24 * 60 * 60))?;
     Ok(area)
+}
+
+#[cfg(test)]
+#[test]
+fn long_windows_download_directory_has_a_native_free_space_readback() {
+    use std::os::windows::ffi::OsStrExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let mut root = directory.path().to_path_buf();
+    while root.as_os_str().encode_wide().count() < 300 {
+        root.push("legal-nested-download-segment");
+    }
+    fs::create_dir_all(&root).unwrap();
+    ensure_windows_download_free_space(&root, 0).unwrap();
 }
 
 pub(super) fn create_owned_staging_batch(

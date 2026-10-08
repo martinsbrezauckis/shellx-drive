@@ -11,11 +11,13 @@ description: >-
 
 ShellX Drive is a single-binary, self-hosted cloud drive: a Rust/Axum server over
 SQLite metadata + filesystem blob storage. **The HTTP API is the primary surface;
-the bundled web app is just another client of it.** Within the v0.1.1 launch
-scope, everything a human can do in the UI — create workspaces, upload/download
-files, share, sync, comment, and run backups — is a plain authenticated HTTP
-call. Your job as the driving agent: make the call, read the returned JSON, and
-**verify the returned receipt and authorized product readback**. An ordinary
+the bundled web app is just another client of it.** Server workflows — create
+workspaces, upload/download files, share, sync, comment, and run backups — use
+authenticated HTTP calls. Native desktop connection setup uses the local app
+and operating-system folder picker; read [Desktop connections](reference.md#desktop-connections)
+when helping with that workflow. Your job as the driving agent: make the call,
+read the returned JSON, and **verify the returned receipt and authorized product
+readback**. An ordinary
 user's agent uses that user's delegated credential; administrator diagnostics
 are a separate surface.
 
@@ -68,7 +70,7 @@ SHELLX_DRIVE_BOOTSTRAP_TOKEN="$(<"$SETUP_TOKEN_FILE")" \
 #   --data-dir    SQLite db + blob store + upload scratch (default .shellx-drive-data)
 #   --token-file  mode-0600 server bearer file; keeps the secret out of argv
 #   --e2e         enable loopback-only /debug/e2e/seed + /debug/e2e/reset helpers
-#   --hosted      enable hosted (multi-tenant) mode; workspace create then needs tenant_id
+#   --hosted      enable hosted (multi-tenant) mode
 ```
 
 The exit trap removes only this run's credential/configuration files. Retain
@@ -134,9 +136,11 @@ exact bearer rather than a human browser session.
 Account-wide delegation can submit and inspect the owner's bounded
 `/desktop-agent` broker commands. Enroll the device through the owner's current
 local-password session; the one-time `sxd_device_` credential belongs in that
-desktop's protected OS credential store. One signed-in desktop maintains up to
-100 accessible owned and shared roots below its local base; viewing one root
-does not make the others inactive. The broker is device-pulled; it does not
+desktop's protected OS credential store. Each independently configured
+server/account connection maintains up to 100 accessible owned and shared roots
+below its own local base and retains its own enrollment. Adding another
+connection or viewing another root preserves the existing connection's sync
+and device identity. The broker is device-pulled; it does not
 accept a listener address, a filesystem path, shell text, arbitrary native-command payload, or free-form
 desktop result. Confirm completion through the command's terminal result;
 report offline, pending-disconnect, candidate-recovery, revoked, or authority-lost

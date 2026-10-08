@@ -1,11 +1,11 @@
 //! macOS Tauri shell and tray projection.
 
-use std::ffi::OsStr;
+use std::{ffi::OsStr, sync::Arc};
 
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State,
+    Emitter, Manager, State,
 };
 use tauri_plugin_notification::NotificationExt;
 
@@ -14,8 +14,7 @@ use super::*;
 mod navigation;
 mod tray_sync;
 
-use navigation::{show_main_window, show_reviews};
-use tray_sync::{tray_sync_enabled, tray_sync_request, TraySyncRequest};
+use navigation::show_main_window;
 
 pub(super) fn run_from_args() -> i32 {
     let mut args = std::env::args_os();
@@ -45,26 +44,60 @@ pub(super) fn run_from_args() -> i32 {
 
 fn run(_lease: crate::platform::unix::instance::UnixDesktopInstanceLease) -> i32 {
     let runtime = match Runtime::load_macos() {
-        Ok(runtime) => runtime,
+        Ok(runtime) => Arc::new(runtime),
         Err(error) => {
             eprintln!("ShellX Drive Desktop could not load its non-secret state: {error}");
             return 1;
         }
     };
-    runtime.reconcile_launch_at_login();
-    if let Err(error) =
-        crate::application::update_service::reconcile_desktop_update_restart(&runtime)
+    let manager = match ConnectionManager::load(Arc::clone(&runtime), Runtime::load_connection) {
+        Ok(manager) => manager,
+        Err(error) => {
+            eprintln!("ShellX Drive Desktop could not load its server connections: {error}");
+            return 1;
+        }
+    };
+    if let Err(error) = runtime
+        .platform
+        .set_launch_at_login(manager.preferences().launch_at_login)
     {
-        eprintln!("ShellX Drive Desktop could not reconcile its pending update restart: {error}");
+        runtime.coordinator.record_error(format!(
+            "Drive could not restore its launch-at-sign-in registration: {error}"
+        ));
+        let _ = runtime.save();
+    }
+    for connection in manager.all_runtimes() {
+        if let Err(error) =
+            crate::application::update_service::reconcile_desktop_update_restart(&connection)
+        {
+            eprintln!("ShellX Drive Desktop could not reconcile a connection's pending update restart: {error}");
+        }
+        if !connection
+            .coordinator
+            .snapshot()
+            .has_pending_disconnect_cleanup()
+        {
+            candidate_recovery::recover_at_startup(&connection);
+        }
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(runtime)
+        .manage(manager)
         .manage(updates::PendingDesktopUpdate::default())
         .invoke_handler(tauri::generate_handler![
             super::super::commands::get_desktop_view,
+            super::super::connection_commands::get_connections_view,
+            super::super::connection_commands::begin_connection,
+            super::super::connection_commands::complete_connection,
+            super::super::connection_commands::save_connection,
+            super::super::connection_commands::save_app_preferences,
+            super::super::connection_commands::cancel_login,
+            super::super::connection_commands::cancel_connection,
+            super::super::connection_commands::remove_connection,
+            super::super::connection_commands::replace_connection_folder,
             super::super::desktop_agent::set_desktop_agent_control,
             super::super::commands::validate_server,
             auth::login_password,
@@ -89,8 +122,8 @@ fn run(_lease: crate::platform::unix::instance::UnixDesktopInstanceLease) -> i32
         ])
         .setup(move |app| {
             let handle = app.handle();
-            let runtime = handle.state::<Runtime>();
-            let menu = build_tray_menu(handle, &runtime)?;
+            let manager = handle.state::<ConnectionManager>();
+            let menu = build_tray_menu(handle, &manager)?;
             TrayIconBuilder::with_id("drive-tray")
                 .menu(&menu)
                 .icon(
@@ -99,66 +132,45 @@ fn run(_lease: crate::platform::unix::instance::UnixDesktopInstanceLease) -> i32
                         .cloned()
                         .expect("ShellX Drive tray icon is bundled"),
                 )
-                .tooltip(tray_tooltip(&runtime))
+                .tooltip(tray_tooltip(&manager))
                 .show_menu_on_left_click(false)
                 .build(app)?;
-            if runtime.coordinator.snapshot().pair.is_some()
-                && !runtime
-                    .coordinator
-                    .snapshot()
-                    .has_pending_disconnect_cleanup()
-            {
-                sync::start_polling(handle, &runtime);
-                let startup = handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = startup.state::<Runtime>();
-                    let _ = sync::sync_now_impl(&startup, &runtime).await;
-                });
+            for connection in manager.all_runtimes() {
+                if connection.coordinator.snapshot().pair.is_some() && manager.may_sync(&connection)
+                {
+                    super::super::desktop_agent::start_polling(handle, &connection);
+                }
+                if manager.may_sync(&connection)
+                    && !connection.candidate_recovery_pending()
+                    && connection.coordinator.snapshot().pair.is_some()
+                {
+                    sync::start_polling(handle, &connection);
+                    let startup = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let runtime = connection;
+                        let _ = sync::sync_now_impl(&startup, &runtime).await;
+                    });
+                }
             }
-            super::super::desktop_agent::start_polling(handle, &runtime);
             super::super::desktop_agent::resume_agent_disconnect_completion(handle);
             Ok(())
         })
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "quit" => app.exit(0),
-            "show" => show_main_window(app),
-            "review" => show_reviews(app),
-            "open-local" => {
-                let runtime = app.state::<Runtime>();
-                if let Some(pair) = runtime.coordinator.snapshot().pair {
-                    let _ = runtime.platform.open_local_root(&pair.local_root);
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            match id {
+                "quit" => app.exit(0),
+                "show" => show_main_window(app),
+                _ => {
+                    if let Some(connection_id) = id.strip_prefix("connection:") {
+                        show_main_window(app);
+                        let _ = app.emit_to(
+                            "main",
+                            "shellx-drive-open-connection",
+                            connection_id.to_string(),
+                        );
+                    }
                 }
             }
-            "open-drive" => {
-                let runtime = app.state::<Runtime>();
-                if let Some(pair) = runtime.coordinator.snapshot().pair {
-                    let _ = runtime.platform.open_drive_url(&pair.server_url);
-                }
-            }
-            "pause-resume" => {
-                let handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = handle.state::<Runtime>();
-                    let paused = !runtime.coordinator.snapshot().paused;
-                    let _ = lifecycle::persist_paused_state(&runtime, paused).await;
-                    update_tray(&handle, &runtime);
-                });
-            }
-            "sync-now" | "recheck-reviews" => {
-                let request = tray_sync_request(event.id().as_ref())
-                    .expect("tray event arm accepts only sync request IDs");
-                let handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let runtime = handle.state::<Runtime>();
-                    let _ = match request {
-                        TraySyncRequest::SyncNow => sync::sync_now_impl(&handle, &runtime).await,
-                        TraySyncRequest::RecheckReviews => {
-                            sync::recheck_reviews_impl(&handle, &runtime).await
-                        }
-                    };
-                });
-            }
-            _ => {}
         })
         .on_tray_icon_event(|app, event| {
             if matches!(
@@ -180,9 +192,14 @@ fn run(_lease: crate::platform::unix::instance::UnixDesktopInstanceLease) -> i32
 #[tauri::command]
 async fn set_paused(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     paused: bool,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(macos_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(macos_error)?;
     lifecycle::persist_paused_state(&runtime, paused)
         .await
         .map_err(macos_error)?;
@@ -190,10 +207,11 @@ async fn set_paused(
     Ok(runtime.view())
 }
 
-pub(crate) fn update_tray(app: &tauri::AppHandle, runtime: &Runtime) {
+pub(crate) fn update_tray(app: &tauri::AppHandle, _runtime: &Runtime) {
+    let manager = app.state::<ConnectionManager>();
     if let Some(tray) = app.tray_by_id("drive-tray") {
-        let _ = tray.set_tooltip(Some(tray_tooltip(runtime)));
-        if let Ok(menu) = build_tray_menu(app, runtime) {
+        let _ = tray.set_tooltip(Some(tray_tooltip(&manager)));
+        if let Ok(menu) = build_tray_menu(app, &manager) {
             let _ = tray.set_menu(Some(menu));
         }
     }
@@ -221,74 +239,57 @@ pub(super) fn notify_actionable(
         .show();
 }
 
-fn tray_tooltip(runtime: &Runtime) -> String {
-    let view = runtime.view();
-    match view.status {
-        "syncing" => "ShellX Drive — Syncing configured locations".to_string(),
-        "needs_review" => format!("ShellX Drive — Needs review ({})", view.review_count),
-        _ => format!("ShellX Drive — {}", tray_sync::status_label(view.status)),
-    }
+fn tray_tooltip(manager: &ConnectionManager) -> String {
+    let view = manager.view();
+    let attention = view
+        .connections
+        .iter()
+        .filter(|connection| {
+            matches!(
+                connection.view.status,
+                "needs_review" | "needs_reconnect" | "offline" | "error"
+            )
+        })
+        .count();
+    let syncing = view
+        .connections
+        .iter()
+        .filter(|connection| connection.view.status == "syncing")
+        .count();
+    format!(
+        "ShellX Drive — {} servers · {} syncing · {} need attention",
+        view.connections.len(),
+        syncing,
+        attention
+    )
 }
 
 fn build_tray_menu<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    runtime: &Runtime,
+    manager: &ConnectionManager,
 ) -> tauri::Result<Menu<R>> {
-    let state = runtime.coordinator.snapshot();
-    let view = runtime.view();
-    let paired = state.pair.is_some();
-    let review_pending = state.has_any_reviews();
-    let cleanup_pending = state.has_pending_disconnect_cleanup();
-    let can_sync = paired && !cleanup_pending && !state.paused && tray_sync_enabled(view.status);
-    let can_pause = paired && !cleanup_pending && view.status != "syncing";
-    let status = MenuItem::with_id(
-        app,
-        "status",
-        format!("ShellX Drive — {}", tray_sync::status_label(view.status)),
-        false,
-        None::<&str>,
-    )?;
+    let menu = Menu::new(app)?;
+    let status = MenuItem::with_id(app, "status", tray_tooltip(manager), false, None::<&str>)?;
+    menu.append(&status)?;
     let show = MenuItem::with_id(app, "show", "Open ShellX Drive", true, None::<&str>)?;
-    let open_local =
-        MenuItem::with_id(app, "open-local", "Open local folder", paired, None::<&str>)?;
-    let open_drive = MenuItem::with_id(app, "open-drive", "Open Drive", paired, None::<&str>)?;
-    let sync = MenuItem::with_id(
-        app,
-        if review_pending {
-            "recheck-reviews"
-        } else {
-            "sync-now"
-        },
-        if review_pending {
-            "Recheck review"
-        } else {
-            "Sync now"
-        },
-        can_sync,
-        None::<&str>,
-    )?;
-    let pause = MenuItem::with_id(
-        app,
-        "pause-resume",
-        if state.paused { "Resume" } else { "Pause" },
-        can_pause,
-        None::<&str>,
-    )?;
-    let review = MenuItem::with_id(app, "review", "Review issues", review_pending, None::<&str>)?;
+    menu.append(&show)?;
+    for connection in manager.view().connections {
+        let item = MenuItem::with_id(
+            app,
+            format!("connection:{}", connection.id),
+            format!(
+                "{} — {}",
+                connection.name,
+                tray_sync::status_label(connection.view.status)
+            ),
+            true,
+            None::<&str>,
+        )?;
+        menu.append(&item)?;
+    }
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(
-        app,
-        &[
-            &status,
-            &show,
-            &open_local,
-            &open_drive,
-            &sync,
-            &pause,
-            &review,
-            &separator,
-            &quit,
-        ],
-    )
+    menu.append(&separator)?;
+    menu.append(&quit)?;
+    Ok(menu)
 }

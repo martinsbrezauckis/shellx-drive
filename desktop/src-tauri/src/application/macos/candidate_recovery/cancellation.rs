@@ -2,9 +2,9 @@
 
 use chrono::Utc;
 use shellx_drive_desktop_core::{
-    classify_exact_credential_removal, classify_exact_credential_write, CredentialStore,
-    DesktopError, DriveHttpClient, ExactCredentialRemoval, ExactCredentialWrite,
-    PendingMacOsCredentialStore, RemoteSessionRecord, Result as CoreResult,
+    classify_exact_credential_write, CredentialStore, DesktopError, DisconnectRequest,
+    DriveHttpClient, ExactCredentialWrite, PendingMacOsCredentialStore, RemoteSessionRecord,
+    Result as CoreResult,
 };
 
 use crate::{application::Runtime, session_identity::SessionIdentity};
@@ -14,6 +14,7 @@ use crate::{application::Runtime, session_identity::SessionIdentity};
 /// bearer is never written to canonical storage.
 pub(super) async fn retire_unpublished_response(
     runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     bearer_token: &str,
     record: &RemoteSessionRecord,
@@ -25,12 +26,16 @@ pub(super) async fn retire_unpublished_response(
 
     runtime.remember_candidate_recovery_record(record);
     runtime.set_candidate_recovery_pending(true);
-    runtime
-        .coordinator
-        .record_pending_candidate_session(record.clone(), Utc::now());
-    runtime.save()?;
+    let mut operation = super::begin_login_publication(stopped)?;
+    let state = crate::application::candidate_admission::prepare_candidate_state(
+        &runtime.coordinator.snapshot(),
+        record,
+        Utc::now(),
+    )?;
+    runtime.store.save(&state)?;
+    operation.publish_persisted_state(state.clone())?;
     let pending = PendingMacOsCredentialStore;
-    match classify_exact_credential_write(
+    let result = match classify_exact_credential_write(
         pending.set(pending_account_key, bearer_token),
         pending.get(pending_account_key),
         bearer_token,
@@ -41,7 +46,9 @@ pub(super) async fn retire_unpublished_response(
                 "Drive canceled sign-in could not be staged for recovery.".to_string(),
             ))
         }
-    }
+    };
+    operation.finish_state(state);
+    result
 }
 
 pub(super) async fn retire_staged_candidate(
@@ -54,25 +61,28 @@ pub(super) async fn retire_staged_candidate(
 ) -> CoreResult<()> {
     match client.logout(bearer_token).await {
         Ok(_) => {
-            state.remove_remote_session_record(record);
-            runtime.store.save(state)?;
-            let pending = PendingMacOsCredentialStore;
-            match classify_exact_credential_removal(
-                pending.delete(pending_account_key),
-                pending.get(pending_account_key),
-            ) {
-                ExactCredentialRemoval::Removed => Ok(()),
-                ExactCredentialRemoval::Retained | ExactCredentialRemoval::Unknown => {
-                    Err(DesktopError::Credential(
-                        "Drive staged credential cleanup was not confirmed; recovery remains required."
-                            .to_string(),
-                    ))
-                }
-            }
+            let slot =
+                crate::session_identity::pending_credential_slot(state, pending_account_key)?;
+            crate::application::unix_candidate_recovery::remove_retired_slot(
+                state,
+                &slot,
+                &PendingMacOsCredentialStore,
+                |persisted| runtime.store.save(persisted),
+            )
         }
         Err(error) => {
-            state.remove_remote_session_record(record);
-            state.record_pending_candidate_session(record.clone(), Utc::now());
+            if state
+                .active_remote_session
+                .as_ref()
+                .is_some_and(|active| active.same_remote_session(record))
+                && state
+                    .pending_candidate_session
+                    .as_ref()
+                    .is_none_or(|pending| pending.same_remote_session(record))
+            {
+                state.active_remote_session = None;
+                state.pending_candidate_session = Some(record.clone());
+            }
             runtime.store.save(state)?;
             Err(error)
         }
@@ -85,7 +95,7 @@ pub(super) fn refresh_pending(runtime: &Runtime) {
         runtime.remember_candidate_recovery_record(record);
     }
     let pending = state.pending_candidate_session.is_some()
-        || PendingMacOsCredentialStore::service_account_keys()
+        || super::owned_pending_keys(&state)
             .map(|slots| {
                 for key in &slots {
                     if let Some(slot) = SessionIdentity::parse_pending_service_key(key) {

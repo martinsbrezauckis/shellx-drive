@@ -11,12 +11,17 @@ mod canonical;
 #[path = "publication/cleanup.rs"]
 mod cleanup;
 
+#[cfg(test)]
+#[path = "publication/tests.rs"]
+mod tests;
+
 pub(in crate::application) use canonical::complete_staged_candidate_promotion;
 use canonical::{canonical_candidate_state, publish_canonical_candidate, CanonicalCandidateState};
 use cleanup::{admit_candidate_publication, preserve_unpublished_candidate};
 
 pub(in crate::application) async fn publish_authenticated_session(
     runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     bearer_token: &str,
     account_email: &str,
@@ -32,12 +37,21 @@ pub(in crate::application) async fn publish_authenticated_session(
         session_id,
         expires_at,
     )?;
-    admit_candidate_publication(runtime, client, bearer_token, &candidate, generation).await?;
+    admit_candidate_publication(
+        runtime,
+        stopped,
+        client,
+        bearer_token,
+        &candidate,
+        generation,
+    )
+    .await?;
     if let Err(error) =
         runtime.ensure_login_matches_retained_pair(client.normalized_url(), account_email)
     {
         retire_unpublished_session(
             runtime,
+            stopped,
             client,
             bearer_token,
             account_email,
@@ -47,11 +61,15 @@ pub(in crate::application) async fn publish_authenticated_session(
         .await?;
         return Err(error);
     }
-    let mut operation = match runtime.coordinator.begin_lifecycle_operation() {
+    // Promote the same request retained before the session was issued. A new
+    // sync or removal cannot win a lifecycle admission between HTTP and this
+    // durable publication.
+    let mut operation = match begin_login_publication(stopped) {
         Ok(operation) => operation,
         Err(error) => {
             retire_unpublished_session(
                 runtime,
+                stopped,
                 client,
                 bearer_token,
                 account_email,
@@ -150,11 +168,6 @@ pub(in crate::application) async fn publish_authenticated_session(
             ));
         }
     }
-    if let Err(error) = WindowsCredentialStore::delete_service_credentials_except(&next_key) {
-        *runtime.session.lock().expect("session lock") = Some(next);
-        operation.finish_state(state);
-        return Err(error);
-    }
     if let Err(error) = remove_staged_candidate(&candidate) {
         *runtime.session.lock().expect("session lock") = Some(next);
         operation.finish_state(state);
@@ -164,4 +177,12 @@ pub(in crate::application) async fn publish_authenticated_session(
     operation.finish_state(state);
     runtime.refresh_candidate_recovery_pending();
     Ok(())
+}
+
+fn begin_login_publication(
+    stopped: &mut DisconnectRequest,
+) -> CoreResult<shellx_drive_desktop_core::LifecycleOperation> {
+    stopped.try_begin()?.ok_or_else(|| {
+        DesktopError::InvalidState("Drive synchronization has not stopped for sign-in".to_string())
+    })
 }

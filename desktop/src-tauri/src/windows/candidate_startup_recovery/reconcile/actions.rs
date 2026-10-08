@@ -1,4 +1,4 @@
-//! State-first actions for an exact staged candidate slot.
+//! Exact staged-slot recovery with durable ownership until deletion.
 
 use super::super::super::{
     remote_revocations::remove_staged_slot,
@@ -28,13 +28,6 @@ fn state_record_for_slot(
         .cloned()
 }
 
-fn remove_superseded_canonical_credentials(candidate: &StagedCandidate) -> CoreResult<()> {
-    WindowsCredentialStore::delete_service_credentials_except(
-        &candidate.slot.identity.credential_key(),
-    )
-    .map_err(|_| recovery_error())
-}
-
 pub(super) fn complete_active_publication(
     runtime: &Runtime,
     candidate: &StagedCandidate,
@@ -44,9 +37,6 @@ pub(super) fn complete_active_publication(
     // out merely because an old canonical bearer is still present.
     complete_staged_candidate_promotion(runtime, &candidate.slot.identity, &candidate.bearer_token)
         .map_err(|_| recovery_error())?;
-    // Keep this exact staged candidate until all superseded canonical slots
-    // are gone. A failed cleanup therefore remains recoverable on restart.
-    remove_superseded_canonical_credentials(candidate)?;
     remove_staged_slot(&candidate.slot).map_err(|_| recovery_error())
 }
 
@@ -70,7 +60,6 @@ pub(super) fn promote_candidate(
     persisted.publish_active_remote_session(record);
     runtime.store.save(&persisted)?;
     *state = persisted;
-    remove_superseded_canonical_credentials(candidate)?;
     remove_staged_slot(&candidate.slot).map_err(|_| recovery_error())
 }
 
@@ -85,16 +74,16 @@ pub(super) async fn retire_unpromoted_candidate(
         .logout(&candidate.bearer_token)
         .await
         .map_err(|_| recovery_error())?;
-    // The server has confirmed this candidate is retired. Persist the locator
-    // removal before deleting its staged bearer. On a save failure retain the
-    // original in-memory record so the recovery latch still admits its exact
-    // identity even if the native store later cannot be enumerated.
+    // Confirm exact local deletion before dropping its durable locator. A
+    // provider failure retains ownership for retry; a save failure retains a
+    // locator whose already-absent slot can be safely rechecked.
+    remove_staged_slot(&candidate.slot).map_err(|_| recovery_error())?;
     if let Some(record) = state_record_for_slot(state, &candidate.slot) {
         let persisted = state_after_confirmed_remote_retirement(state, &record);
         runtime.store.save(&persisted)?;
         *state = persisted;
     }
-    remove_staged_slot(&candidate.slot).map_err(|_| recovery_error())
+    Ok(())
 }
 
 pub(super) async fn recover_unstaged_candidate(
@@ -103,6 +92,9 @@ pub(super) async fn recover_unstaged_candidate(
     record: &RemoteSessionRecord,
 ) -> CoreResult<()> {
     let identity = SessionIdentity::new(&record.server_url, &record.account_email);
+    if !runtime.owns_session_identity(&identity) {
+        return Err(recovery_error());
+    }
     let bearer_token = runtime
         .platform
         .credentials()

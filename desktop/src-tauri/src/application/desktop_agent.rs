@@ -5,16 +5,25 @@
 //! inbound connection.
 
 use shellx_drive_desktop_core::{
-    classify_exact_credential_removal, classify_exact_credential_write,
-    desktop_agent_enrollment_fingerprint, CredentialStore, DesktopAgentDeviceAssertion,
-    DesktopAgentObservedStatus, DesktopError, DriveHttpClient, ExactCredentialRemoval,
-    ExactCredentialWrite, Result as CoreResult, CURRENT_DESKTOP_AGENT_PLATFORM,
+    desktop_agent_enrollment_fingerprint, DesktopAgentDeviceAssertion, DesktopAgentObservedStatus,
+    DesktopError, DriveHttpClient, Result as CoreResult, CURRENT_DESKTOP_AGENT_PLATFORM,
 };
 use tauri::{AppHandle, State};
 
-use super::{DesktopView, Runtime};
+use super::{ConnectionManager, DesktopView, Runtime};
 
 mod actions;
+mod credentials;
+pub(crate) use credentials::{
+    current_device_credential_key, device_credential, scoped_device_cleanup_slot,
+};
+pub(super) use credentials::{
+    finish_confirmed_agent_retirement, publish_registered_agent, remove_exact_agent_credential,
+    write_exact_agent_credential,
+};
+#[cfg(test)]
+#[path = "desktop_agent/credential_tests.rs"]
+mod credential_tests;
 mod dispatcher;
 mod poller;
 #[cfg(test)]
@@ -72,9 +81,16 @@ pub(crate) fn pending_disconnect_requires_capability_retry(runtime: &Runtime) ->
 #[tauri::command]
 pub(crate) async fn set_desktop_agent_control(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     enabled: bool,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(|error| error.to_string())?;
+    manager
+        .ensure_mutation_allowed()
+        .map_err(|error| error.to_string())?;
     if enabled {
         enable_after_local_confirmation(&runtime)
             .await
@@ -96,23 +112,21 @@ pub(crate) async fn enable_after_local_confirmation(runtime: &Runtime) -> CoreRe
     runtime.ensure_disconnect_cleanup_complete()?;
     runtime.require_candidate_recovery_complete()?;
     let _publication = runtime.auth_publication.lock().await;
+    // Admit the complete enrollment before issuing a new remote device or
+    // writing its credential. Sync, removal and updater restart reservation
+    // must not reject publication after the side effects have already happened.
+    let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
     let state = runtime.coordinator.snapshot();
     let pair = state.pair.as_ref().ok_or(DesktopError::NeedsSetup)?;
     let enrollment_fingerprint =
         desktop_agent_enrollment_fingerprint(&pair.server_url, &pair.account_email);
     if state.desktop_agent_control.enabled {
-        let active = state
-            .desktop_agent_control
-            .device_id
-            .as_deref()
-            .ok_or_else(|| {
-                DesktopError::InvalidState("desktop-agent enrollment has no device ID".to_string())
-            })?;
+        let active = current_device_credential_key(&state)?;
         if state.desktop_agent_control.pair_fingerprint.as_deref() == Some(&enrollment_fingerprint)
             && runtime
                 .platform
                 .desktop_agent_credentials()
-                .get(active)?
+                .get(&active)?
                 .is_some()
         {
             return Ok(());
@@ -128,36 +142,20 @@ pub(crate) async fn enable_after_local_confirmation(runtime: &Runtime) -> CoreRe
     let registration = client
         .register_desktop_agent_device(&owner_bearer, CURRENT_DESKTOP_AGENT_PLATFORM, &assertion)
         .await?;
-    let device_id = registration.device_id.clone();
-    write_exact_agent_credential(
-        runtime.platform.desktop_agent_credentials(),
-        &device_id,
-        &registration.device_credential,
-    )?;
-
-    let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
-    let mut next = runtime.coordinator.snapshot();
-    if let Err(error) = next.desktop_agent_control.enroll(
-        device_id.clone(),
-        registration.credential_expires_at,
+    publish_registered_agent(
+        runtime,
+        &mut operation,
+        &registration,
         enrollment_fingerprint,
-    ) {
-        let _ =
-            remove_exact_agent_credential(runtime.platform.desktop_agent_credentials(), &device_id);
-        return Err(error);
-    }
-    if let Err(error) = runtime.store.save(&next) {
-        // Do not leave a secret in an unreferenced namespace. The server-side
-        // registration has no local claimant once this delete succeeds.
-        let _ = client
-            .retire_desktop_agent_device(&device_id, &registration.device_credential, &assertion)
-            .await;
-        let _ =
-            remove_exact_agent_credential(runtime.platform.desktop_agent_credentials(), &device_id);
-        return Err(error);
-    }
-    operation.finish_state(next);
-    Ok(())
+        || {
+            client.retire_desktop_agent_device(
+                &registration.device_id,
+                &registration.device_credential,
+                &assertion,
+            )
+        },
+    )
+    .await
 }
 
 /// Disable is also a local Settings action. The server must first retire the
@@ -166,6 +164,7 @@ pub(crate) async fn enable_after_local_confirmation(runtime: &Runtime) -> CoreRe
 pub(crate) async fn disable_after_local_confirmation(runtime: &Runtime) -> CoreResult<()> {
     runtime.ensure_disconnect_cleanup_complete()?;
     let _publication = runtime.auth_publication.lock().await;
+    let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
     let state = runtime.coordinator.snapshot();
     if !state.desktop_agent_control.enabled {
         return Ok(());
@@ -178,19 +177,14 @@ pub(crate) async fn disable_after_local_confirmation(runtime: &Runtime) -> CoreR
             DesktopError::InvalidState("desktop-agent enrollment has no device ID".to_string())
         })?
         .to_string();
+    current_device_credential_key(&state)?;
     let session = runtime.current_session()?;
     let owner_bearer = runtime.current_token(&session)?;
     let client = DriveHttpClient::new(&session.server_url)?;
     client
         .revoke_desktop_agent_device(&device_id, &owner_bearer)
         .await?;
-    remove_exact_agent_credential(runtime.platform.desktop_agent_credentials(), &device_id)?;
-    let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
-    let mut next = runtime.coordinator.snapshot();
-    next.retire_desktop_agent_control();
-    runtime.store.save(&next)?;
-    operation.finish_state(next);
-    Ok(())
+    finish_confirmed_agent_retirement(runtime, &mut operation, &state)
 }
 
 pub(crate) fn current_assertion(
@@ -253,58 +247,4 @@ fn require_current_enrollment_binding(
         ));
     }
     Ok(())
-}
-
-pub(crate) fn device_credential(runtime: &Runtime) -> CoreResult<(String, String)> {
-    let state = runtime.coordinator.snapshot();
-    if !state.desktop_agent_control.enabled {
-        return Err(DesktopError::InvalidState(
-            "desktop-agent control has not been enabled locally".to_string(),
-        ));
-    }
-    let device_id = state.desktop_agent_control.device_id.ok_or_else(|| {
-        DesktopError::InvalidState("desktop-agent enrollment has no device ID".to_string())
-    })?;
-    let credential = runtime
-        .platform
-        .desktop_agent_credentials()
-        .get(&device_id)?
-        .ok_or_else(|| {
-            DesktopError::Credential("desktop-agent device credential is unavailable".to_string())
-        })?;
-    Ok((device_id, credential))
-}
-
-pub(super) fn write_exact_agent_credential(
-    store: &dyn CredentialStore,
-    device_id: &str,
-    credential: &str,
-) -> CoreResult<()> {
-    match classify_exact_credential_write(
-        store.set(device_id, credential),
-        store.get(device_id),
-        credential,
-    ) {
-        ExactCredentialWrite::Written => Ok(()),
-        ExactCredentialWrite::NotWritten | ExactCredentialWrite::Unknown => {
-            Err(DesktopError::Credential(
-                "desktop-agent device credential could not be stored and read back exactly"
-                    .to_string(),
-            ))
-        }
-    }
-}
-
-pub(super) fn remove_exact_agent_credential(
-    store: &dyn CredentialStore,
-    device_id: &str,
-) -> CoreResult<()> {
-    match classify_exact_credential_removal(store.delete(device_id), store.get(device_id)) {
-        ExactCredentialRemoval::Removed => Ok(()),
-        ExactCredentialRemoval::Retained | ExactCredentialRemoval::Unknown => {
-            Err(DesktopError::Credential(
-                "desktop-agent device credential removal could not be verified".to_string(),
-            ))
-        }
-    }
 }

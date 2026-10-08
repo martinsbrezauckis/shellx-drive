@@ -4,7 +4,7 @@ use shellx_drive_desktop_core::{
     DriveHttpClient, Result as CoreResult, SyncPair,
 };
 use std::{collections::BTreeSet, time::Duration};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use super::actions::{
     agent_sync_result, agent_view_result, check_update, dispatch_authorized_root_refresh,
@@ -115,16 +115,17 @@ pub(super) async fn execute_typed_command(
                 })
         }
         Command::SetLaunchAtLogin { enabled } => {
-            super::super::commands::persist_launch_at_login_state(runtime, enabled)
-                .await
-                .map(|_| {
+            let manager = app.state::<crate::application::ConnectionManager>();
+            super::super::connection_commands::persist_launch_preference(&manager, enabled).map(
+                |view| {
                     (
                         DesktopAgentResultCode::LaunchAtLoginPersisted,
                         DesktopAgentResultPayload::LaunchAtLogin {
-                            enabled: runtime.coordinator.snapshot().launch_at_login,
+                            enabled: view.preferences.launch_at_login,
                         },
                     )
-                })
+                },
+            )
         }
         Command::PrepareReviewAction {
             pair_id,

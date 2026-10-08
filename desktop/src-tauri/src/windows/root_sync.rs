@@ -55,12 +55,39 @@ pub(crate) async fn refresh_authorized_roots(runtime: &Runtime) -> CoreResult<()
 #[tauri::command]
 pub(super) async fn start_pair(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     workspace_id: String,
     remote_root_id: Option<String>,
     sync_root_id: String,
     local_root: String,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
+    start_pair_impl(
+        &app,
+        &runtime,
+        &manager,
+        workspace_id,
+        remote_root_id,
+        sync_root_id,
+        local_root,
+    )
+    .await
+}
+
+pub(crate) async fn start_pair_impl(
+    app: &tauri::AppHandle,
+    runtime: &Arc<Runtime>,
+    manager: &ConnectionManager,
+    workspace_id: String,
+    remote_root_id: Option<String>,
+    sync_root_id: String,
+    local_root: String,
+) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(user_error)?;
@@ -77,7 +104,6 @@ pub(super) async fn start_pair(
         .begin_lifecycle_operation()
         .map_err(user_error)?;
     let current = runtime.coordinator.snapshot();
-    let was_first_pair = current.pair_count() == 0;
     let base = PathBuf::from(local_root.trim());
     if !base.exists() {
         return Err("Choose an existing empty folder for the local Drive tree.".to_string());
@@ -121,6 +147,19 @@ pub(super) async fn start_pair(
         .require_captured_setup_session_during_publication(&session, &token)
         .map_err(user_error)?;
 
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "That server connection is no longer available.".to_string())?;
+    let admission = manager.admission.lock().await;
+    if current.pair_count() == 0 {
+        manager
+            .validate_local_folder(&id, &base)
+            .map_err(user_error)?;
+    } else {
+        manager
+            .validate_add_root_folder(&id, &base)
+            .map_err(user_error)?;
+    }
     let mut candidate = current;
     let materialized = materialize_discovered_roots(
         &mut candidate,
@@ -146,12 +185,6 @@ pub(super) async fn start_pair(
     candidate
         .activate_pair(&selected_pair_id)
         .map_err(user_error)?;
-    // New materialization intentionally starts disabled until all marker and
-    // state writes succeeded. This is the same durable publication ordering
-    // used by the former one-root pairing path.
-    if was_first_pair {
-        candidate.launch_at_login = false;
-    }
     if let Err(error) = runtime.store.save(&candidate) {
         rollback_created_markers(&materialized.created_markers);
         return Err(user_error(error));
@@ -161,67 +194,248 @@ pub(super) async fn start_pair(
         .map_err(user_error)?;
     drop(materialized);
     invalidate_pending_confirmation(&runtime);
-    if !was_first_pair {
-        operation.finish_state(candidate);
-        drop(_auth_publication);
-        update_tray(&app, &runtime);
-        return sync_now_impl(&app, &runtime).await;
-    }
-    if let Err(error) = runtime.platform.set_launch_at_login(true) {
-        candidate.last_error = Some(format!(
-            "Drive roots were paired, but Windows launch-at-sign-in could not be enabled: {error}"
-        ));
-        let _ = runtime.store.save(&candidate);
-        operation.finish_state(candidate);
-        update_tray(&app, &runtime);
-        return Ok(runtime.view());
-    }
-    candidate.launch_at_login = true;
-    if let Err(error) = runtime.store.save(&candidate) {
-        let rollback = runtime.platform.set_launch_at_login(false);
-        candidate.launch_at_login = false;
-        candidate.last_error = Some(match rollback {
-            Ok(()) => format!(
-                "Drive roots were paired, but their launch-at-sign-in preference could not be saved: {error}"
-            ),
-            Err(rollback_error) => format!(
-                "Drive roots were paired, but launch-at-sign-in needs repair after persistence and rollback failures: {error}; {rollback_error}"
-            ),
-        });
-        let _ = runtime.store.save(&candidate);
-        operation.finish_state(candidate);
-        update_tray(&app, &runtime);
-        return Ok(runtime.view());
-    }
     operation.finish_state(candidate);
+    drop(admission);
     drop(_auth_publication);
     update_tray(&app, &runtime);
     start_polling(&app, &runtime);
-    sync_now_impl(&app, &runtime).await
+    if manager.may_sync(runtime) {
+        sync_now_impl(&app, &runtime).await
+    } else {
+        Ok(runtime.view())
+    }
 }
 
 #[tauri::command]
 pub(super) async fn add_root(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     workspace_id: String,
     remote_root_id: Option<String>,
     sync_root_id: String,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     let base = runtime
         .coordinator
         .snapshot()
         .sync_root_base
         .ok_or_else(|| "Connect a first Drive root before adding another.".to_string())?;
-    start_pair(
-        app,
-        runtime,
+    start_pair_impl(
+        &app,
+        &runtime,
+        &manager,
         workspace_id,
         remote_root_id,
         sync_root_id,
         base.to_string_lossy().into_owned(),
     )
     .await
+}
+
+pub(crate) async fn replace_folder_impl(
+    app: &AppHandle,
+    runtime: &Arc<Runtime>,
+    manager: &ConnectionManager,
+    local_root: String,
+) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    runtime
+        .require_candidate_recovery_complete()
+        .map_err(user_error)?;
+    runtime
+        .ensure_disconnect_cleanup_complete()
+        .map_err(user_error)?;
+    if runtime.coordinator.snapshot().has_any_reviews() {
+        return Err(
+            "Resolve this server's pending reviews before changing its local folder.".to_string(),
+        );
+    }
+    let was_polling = runtime.polling_enabled.load(Ordering::Acquire);
+    stop_polling(runtime);
+    let result = replace_folder_transaction(app, runtime, manager, local_root).await;
+    if was_polling || result.is_ok() {
+        start_polling(app, runtime);
+    }
+    result
+}
+
+async fn replace_folder_transaction(
+    app: &AppHandle,
+    runtime: &Arc<Runtime>,
+    manager: &ConnectionManager,
+    local_root: String,
+) -> Result<DesktopView, String> {
+    let mut stop_request = tokio::time::timeout(
+        Duration::from_secs(30),
+        crate::application::request_disconnect_after_sync(runtime),
+    )
+    .await
+    .map_err(|_| {
+        "This server's sync is still stopping. Retry the folder change when it has stopped."
+            .to_string()
+    })?
+    .map_err(user_error)?;
+    let generation = runtime.auth_offboarding.admit_login().map_err(user_error)?;
+    let _publication = runtime.auth_publication.lock().await;
+    let mut operation = stop_request
+        .try_begin()
+        .map_err(user_error)?
+        .ok_or_else(|| "This server started syncing again. Retry the folder change.".to_string())?;
+    let current = runtime.coordinator.snapshot();
+    if current.has_any_reviews() {
+        return Err(
+            "Resolve this server's pending reviews before changing its local folder.".to_string(),
+        );
+    }
+    let selected_pair = current.pair.clone().ok_or_else(|| {
+        "Connect this server to Drive content before changing its folder.".to_string()
+    })?;
+    let session = runtime.current_session().map_err(user_error)?;
+    let bearer = runtime.current_token(&session).map_err(user_error)?;
+    let client = DriveHttpClient::new(&session.server_url).map_err(user_error)?;
+    let (discovered, _) = crate::application::root_discovery::discover_for_sync_refresh(
+        runtime, &session, &bearer, &client, &current,
+    )
+    .await
+    .map_err(user_error)?;
+    let mut roots = Vec::new();
+    let mut histories = HashMap::new();
+    for pair in current.pairs() {
+        let root = discovered
+            .iter()
+            .find(|root| {
+                root.workspace_id == pair.workspace_id && root.root_file_id == pair.remote_root_id
+            })
+            .or_else(|| {
+                current
+                    .sync_root_for_pair(pair)
+                    .map(|metadata| &metadata.root)
+            })
+            .ok_or_else(|| {
+                "Recheck this server's Drive content before changing its folder.".to_string()
+            })?;
+        let selected = admit_user_session_response_during_publication(
+            runtime,
+            &session,
+            &bearer,
+            client
+                .revalidate_selected_sync_root(
+                    &bearer,
+                    &root.id,
+                    &pair.workspace_id,
+                    pair.remote_root_id.as_deref(),
+                )
+                .await,
+        )
+        .map_err(user_error)?;
+        let manifest = admit_user_session_response_during_publication(
+            runtime,
+            &session,
+            &bearer,
+            client.sync_root_manifest(&bearer, &selected).await,
+        )
+        .map_err(user_error)?;
+        let activity = if pair == &selected_pair {
+            current.activity.clone()
+        } else {
+            current
+                .inactive_pairs
+                .iter()
+                .find(|profile| profile.pair == *pair)
+                .map(|profile| profile.activity.clone())
+                .unwrap_or_default()
+        };
+        histories.insert(
+            (pair.workspace_id.clone(), pair.remote_root_id.clone()),
+            activity,
+        );
+        roots.push(manifest.root);
+    }
+    if !runtime.auth_offboarding.may_publish(generation) {
+        return Err("The folder change was canceled by a newer sign-in or removal.".to_string());
+    }
+    runtime
+        .require_captured_setup_session_during_publication(&session, &bearer)
+        .map_err(user_error)?;
+    let base = PathBuf::from(local_root.trim());
+    ensure_empty_local_root(&base).map_err(user_error)?;
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "That server connection is no longer available.".to_string())?;
+    let _admission = manager.admission.lock().await;
+    manager
+        .validate_local_folder(&id, &base)
+        .map_err(user_error)?;
+    let _old_roots =
+        guard_configured_pair_roots(&current, &selected_pair.local_root).map_err(user_error)?;
+    let mut candidate = current.clone();
+    candidate.pair = None;
+    candidate.inactive_pairs.clear();
+    candidate.sync_roots.clear();
+    candidate.sync_root_base = None;
+    candidate.sync_cycle_resume_pair_id = None;
+    candidate.baseline.clear();
+    candidate.change_cursor = 0;
+    candidate.reviews.clear();
+    candidate.activity.clear();
+    candidate.last_successful_sync = None;
+    candidate.last_error = None;
+    let materialized = materialize_discovered_roots(
+        &mut candidate,
+        &roots,
+        Some(base),
+        &session,
+        client.normalized_url(),
+        false,
+    )
+    .map_err(user_error)?;
+    let selected_id = candidate
+        .pairs()
+        .find(|pair| {
+            pair.workspace_id == selected_pair.workspace_id
+                && pair.remote_root_id == selected_pair.remote_root_id
+        })
+        .map(sync_pair_id)
+        .ok_or_else(|| {
+            "The saved Drive content could not be configured in the new folder.".to_string()
+        });
+    let selected_id = match selected_id {
+        Ok(id) => id,
+        Err(error) => {
+            rollback_created_markers(&materialized.created_markers);
+            return Err(error);
+        }
+    };
+    if let Err(error) = candidate.activate_pair(&selected_id) {
+        rollback_created_markers(&materialized.created_markers);
+        return Err(user_error(error));
+    }
+    if let Some(pair) = candidate.pair.as_ref() {
+        candidate.activity = histories
+            .remove(&(pair.workspace_id.clone(), pair.remote_root_id.clone()))
+            .unwrap_or_default();
+    }
+    for profile in &mut candidate.inactive_pairs {
+        profile.activity = histories
+            .remove(&(
+                profile.pair.workspace_id.clone(),
+                profile.pair.remote_root_id.clone(),
+            ))
+            .unwrap_or_default();
+    }
+    if let Err(error) = runtime.store.save(&candidate) {
+        rollback_created_markers(&materialized.created_markers);
+        return Err(user_error(error));
+    }
+    operation.finish_state(candidate);
+    runtime.local_usage_cache.invalidate();
+    invalidate_pending_confirmation(runtime);
+    update_tray(app, runtime);
+    Ok(runtime.view())
 }
 
 /// Mutate a detached candidate state only. Callers save it atomically before

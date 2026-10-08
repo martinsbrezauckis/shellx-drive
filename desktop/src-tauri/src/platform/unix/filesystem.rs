@@ -224,7 +224,6 @@ impl UnixRootGuard {
         descriptor::ensure_child_root(self, relative)
     }
 
-    #[cfg(any(target_os = "macos", test))]
     pub(crate) fn ensure_empty_root(&self) -> CoreResult<()> {
         descriptor::ensure_empty_root(self)
     }

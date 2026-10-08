@@ -29,6 +29,7 @@ pub(crate) struct MacOsPreparedReplacement {
     destination_leaf: OsString,
     staging_parent: fs::File,
     staging_leaf: OsString,
+    staged: fs::File,
     staged_identity: FileIdentity,
     existing: fs::File,
     existing_identity: FileIdentity,
@@ -85,6 +86,7 @@ pub(crate) fn prepare_staged_file_replacement(
         destination_leaf,
         staging_parent,
         staging_leaf,
+        staged: staged_file,
         staged_identity,
         existing,
         existing_identity,
@@ -123,6 +125,7 @@ impl MacOsPreparedReplacement {
                 });
             }
             revalidate_local()?;
+            validate_private_staging_file(&self.staged)?;
             if !current_destination_matches(
                 guard,
                 &self.destination_parent,
@@ -131,6 +134,10 @@ impl MacOsPreparedReplacement {
                 self.existing_identity,
                 &self.expected_local,
                 &self.relative_destination,
+            )? || !entry_at_matches(
+                &self.staging_parent,
+                &self.staging_leaf,
+                self.staged_identity,
             )? || !private_recovery_matches(&self.private_recovery, &self.expected_local)?
             {
                 return Ok(ReplacingPublication::NeedsReview {
@@ -198,7 +205,8 @@ fn recovery_staging_path(staged: &Path) -> CoreResult<PathBuf> {
 }
 
 fn private_recovery_matches(path: &Path, expected: &LocalEntry) -> CoreResult<bool> {
-    let recovery = fs::File::open(path)?;
+    let (parent, leaf) = open_absolute_parent(path)?;
+    let recovery = open_regular_file_at(&parent, &leaf)?;
     validate_private_staging_file(&recovery)?;
     ensure_single_linked_regular_file(&recovery, path)?;
     file_matches_local_entry(&recovery, expected)
@@ -225,7 +233,7 @@ fn copy_open_file_to_private_staging(
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW)
         .open(destination)?;
-    validate_private_staging_file(&writer)?;
+    shellx_drive_desktop_core::protect_new_private_staging_file(&writer)?;
     let (_, copied) = copy_and_hash_reader_bounded(
         &mut reader,
         &mut writer,

@@ -33,6 +33,9 @@ independently of other ShellX products.
 - **Open clients and protocols:** desktop sync applications for Windows, macOS,
   and Linux, fixed-size delta sync, nested WebDAV, an office provider bridge,
   and a small Google Drive API subset for adapters.
+- **Independent desktop connections:** keep multiple servers and accounts
+  syncing in separate local folders, with shared app preferences, per-connection
+  sync check intervals, and combined activity history.
 - **Operations included:** streaming `.sxdbackup` v2 backups, validation and
   restore, retention policy, storage usage, security activity, session control,
   readiness checks, and a redacted support bundle.
@@ -114,11 +117,11 @@ process.
 
 ## Capability map
 
-| Area | Included in v0.1.1 |
+| Area | Included |
 | --- | --- |
 | Files | Create, upload, download, copy, move, rename, search, metadata, folder covers, previews, batch ZIP download, trash, and revision history |
 | Collaboration | Workspaces, roles, invitations, groups, comments, guest shares, guest upload drops, visit/download accounting, and per-workspace policies |
-| Sync | Desktop sync reference engine and native clients for Windows x86-64, macOS arm64, and Linux x86-64 with the required desktop runtime APIs; mobile metadata sync, offline marks, resumable upload, fixed-size delta sync, and conflict copies |
+| Sync | Native desktop clients for Windows x86-64, macOS arm64, and Linux x86-64 with independent server/account connections, managed roots, configurable sync checks, and combined history; mobile metadata sync, offline marks, resumable upload, fixed-size delta sync, and conflict copies |
 | Interoperability | Nested WebDAV, office provider handoff, bounded legacy text import/export, and a Google Drive API subset |
 | Identity | Local password accounts, TOTP 2FA, recovery codes, revocable sessions, browser/IP security history, and an optional trusted identity bridge |
 | Operations | Readiness, streaming v2 backup/validate/restore, retention cleanup, quotas, activity logs, email outbox status, and support bundles |
@@ -129,6 +132,16 @@ Install and configure desktop sync using the
 [Windows](docs/public/WINDOWS_DESKTOP.md),
 [macOS](docs/public/MACOS_DESKTOP.md), or
 [Linux](docs/public/LINUX_DESKTOP.md) guide.
+
+On first desktop launch, save your app preferences, then choose **Servers →
+Add server**. Sign in with your account email and current server password,
+complete two-factor authentication when requested, and use **Browse…** to
+choose a separate empty local folder. Each saved connection has scoped editing,
+sign-in renewal, folder replacement, and removal controls. Local files remain
+in place when replacing a folder or removing a connection. **App settings**
+contains appearance, launch preferences, the default sync check interval, and
+the direct **Download and install** desktop-update action. The third tab,
+**History**, brings activity across accounts together with filters and search.
 
 ## Configuration
 
@@ -189,9 +202,9 @@ feature and installed-client qualification remains separate.
 | [Configuration](docs/public/CONFIG.md) | CLI flags and `SHELLX_DRIVE_*` environment variables |
 | [API](docs/public/API.md) | Authenticated and public HTTP route catalog |
 | [Architecture](docs/public/ARCHITECTURE.md) | Storage, workspace, sync, conflict, and service boundaries |
-| [Windows desktop](docs/public/WINDOWS_DESKTOP.md) | Installer verification, one connection, managed roots, status, and recovery |
-| [macOS desktop](docs/public/MACOS_DESKTOP.md) | Installation, one connection, managed roots, and recovery |
-| [Linux desktop](docs/public/LINUX_DESKTOP.md) | Installation, one connection, managed roots, and recovery |
+| [Windows desktop](docs/public/WINDOWS_DESKTOP.md) | Installer verification, server connections, managed roots, app settings, and recovery |
+| [macOS desktop](docs/public/MACOS_DESKTOP.md) | Installation, server connections, managed roots, app settings, and recovery |
+| [Linux desktop](docs/public/LINUX_DESKTOP.md) | Installation, server connections, managed roots, app settings, and recovery |
 | [Support and compatibility](docs/public/SUPPORT_AND_COMPATIBILITY.md) | Supported features, preview formats, runtime requirements, and safe issue reporting |
 | [Third-party notices](NOTICE) | Project Nayuki QR Code generator attribution and regeneration record |
 | [Debug API](docs/public/DEBUG_API.md) | Agent/test surface and redaction contract |

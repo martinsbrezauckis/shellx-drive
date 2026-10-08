@@ -2,7 +2,11 @@
 
 mod recovery;
 
-use shellx_drive_desktop_core::{DesktopError, PendingLinuxCredentialStore, Result as CoreResult};
+use std::collections::BTreeSet;
+
+use shellx_drive_desktop_core::{
+    DesktopError, DesktopState, PendingLinuxCredentialStore, Result as CoreResult,
+};
 
 use crate::{application::Runtime, session_identity::SessionIdentity};
 
@@ -32,11 +36,7 @@ impl Runtime {
             .lock()
             .expect("candidate recovery identity lock")
             .contains(&requested);
-        let staged = PendingLinuxCredentialStore::service_account_keys()?
-            .iter()
-            .filter_map(|key| SessionIdentity::parse_pending_service_key(key))
-            .any(|slot| slot.identity.credential_key() == requested);
-        if recorded || remembered || staged {
+        if recorded || remembered {
             Ok(())
         } else {
             Err(DesktopError::Credential(
@@ -52,7 +52,7 @@ impl Runtime {
             self.remember_candidate_recovery_record(record);
         }
         let pending = state.pending_candidate_session.is_some()
-            || PendingLinuxCredentialStore::service_account_keys()
+            || owned_pending_keys(&state)
                 .map(|slots| {
                     for key in &slots {
                         if let Some(slot) = SessionIdentity::parse_pending_service_key(key) {
@@ -66,4 +66,52 @@ impl Runtime {
     }
 }
 
+/// Candidates are owned by their durable exact session locator. Another
+/// connection, including a rejected duplicate sign-in, may have a pending
+/// bearer for the same account; account identity alone does not admit it.
+pub(super) fn pending_locator_keys(state: &DesktopState) -> BTreeSet<String> {
+    state
+        .pending_candidate_session
+        .iter()
+        .chain(state.active_remote_session.iter())
+        .chain(state.pending_remote_revocations.iter())
+        .filter_map(|record| {
+            SessionIdentity::new(&record.server_url, &record.account_email)
+                .pending_service_key(&record.session_id)
+                .map(|slot| slot.account_key)
+        })
+        .chain(
+            state
+                .pending_disconnect_cleanup()
+                .into_iter()
+                .flat_map(|cleanup| cleanup.credential_slots.iter())
+                .filter(|slot| {
+                    slot.namespace
+                        == shellx_drive_desktop_core::DisconnectCredentialNamespace::PendingCandidate
+                })
+                .map(|slot| slot.account_key.clone()),
+        )
+        .collect()
+}
+
+pub(super) fn owned_pending_keys(state: &DesktopState) -> CoreResult<Vec<String>> {
+    let owned = pending_locator_keys(state);
+    if owned.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(filter_owned_pending_keys(
+        state,
+        PendingLinuxCredentialStore::service_account_keys()?,
+    ))
+}
+
+fn filter_owned_pending_keys(state: &DesktopState, keys: Vec<String>) -> Vec<String> {
+    let owned = pending_locator_keys(state);
+    keys.into_iter().filter(|key| owned.contains(key)).collect()
+}
+
 pub(super) use recovery::recover_at_startup;
+
+#[cfg(test)]
+#[path = "candidate/tests.rs"]
+mod tests;

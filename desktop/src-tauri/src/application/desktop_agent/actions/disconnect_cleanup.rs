@@ -14,15 +14,9 @@ pub(in crate::application::desktop_agent) fn persist_agent_disconnect_admission(
     operation: &mut LifecycleOperation,
     continuation: DesktopAgentDisconnectContinuation,
 ) -> CoreResult<()> {
-    #[cfg(target_os = "linux")]
+    let saved = runtime.coordinator.snapshot();
     let credential_slots =
-        shellx_drive_desktop_core::LinuxCredentialStore::disconnect_credential_slots()?;
-    #[cfg(target_os = "macos")]
-    let credential_slots =
-        shellx_drive_desktop_core::MacOsCredentialStore::disconnect_credential_slots()?;
-    #[cfg(target_os = "windows")]
-    let credential_slots =
-        shellx_drive_desktop_core::WindowsCredentialStore::disconnect_credential_slots()?;
+        crate::application::connection_credentials::cleanup_slots(runtime, &saved)?;
 
     let mut state = runtime.coordinator.snapshot();
     if state.has_pending_disconnect_cleanup() || state.pending_desktop_agent_disconnect().is_some()
@@ -71,7 +65,6 @@ pub(in crate::application::desktop_agent) fn complete_agent_disconnect_local_cle
 
     #[cfg(target_os = "linux")]
     {
-        runtime.platform.set_launch_at_login(false)?;
         crate::application::linux::disconnect::complete_local_cleanup_with_finalizer(
             &runtime.store,
             &mut state,
@@ -86,7 +79,6 @@ pub(in crate::application::desktop_agent) fn complete_agent_disconnect_local_cle
     )?;
     #[cfg(target_os = "windows")]
     {
-        runtime.platform.set_launch_at_login(false)?;
         crate::application::windows::disconnect_cleanup::complete_local_cleanup_with_finalizer(
             &runtime.store,
             &mut state,

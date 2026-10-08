@@ -982,6 +982,7 @@ impl Storage {
             if !matches!(parent.kind, FileKind::Folder) {
                 return Err(ApiError::Validation("parent must be a folder".to_string()));
             }
+            super::validate_parent_chain_in_tx(&tx, &active.workspace_id, &parent.id, None)?;
             file.parent_id = Some(parent.id);
             file.name = crate::storage::file_destination::available_copy_name_in_tx(
                 &tx,

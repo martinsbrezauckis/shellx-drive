@@ -8,7 +8,7 @@ use serde::Serialize;
 use shellx_drive_desktop_core::ReviewAction;
 use tauri::{AppHandle, State};
 
-use super::{DesktopView, Runtime};
+use super::{ConnectionManager, DesktopView, Runtime};
 
 mod confirmation;
 mod native;
@@ -32,10 +32,14 @@ pub(crate) struct ReviewConfirmation {
 
 #[tauri::command]
 pub(crate) fn prepare_review_action(
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     review_id: String,
     action: ReviewAction,
 ) -> Result<ReviewConfirmation, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(|error| error.to_string())?;
     prepare_review_confirmation(&runtime, review_id, action).map_err(|error| error.to_string())
 }
 
@@ -45,11 +49,15 @@ pub(crate) fn prepare_review_action(
 #[tauri::command]
 pub(crate) async fn choose_review_action(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     review_id: String,
     action: ReviewAction,
     confirmation_id: String,
 ) -> Result<DesktopView, String> {
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(|error| error.to_string())?;
     let prompt = native_review_prompt(&runtime, &review_id, action, &confirmation_id)?;
     execute_after_native_choice(show_native_review_dialog(&app, prompt).await, || async {
         #[cfg(target_os = "windows")]

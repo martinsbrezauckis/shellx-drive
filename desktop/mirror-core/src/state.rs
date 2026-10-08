@@ -64,7 +64,9 @@ impl StateStore {
             }
         }
         validate_desktop_state(&state)?;
-        state.prune_remote_sessions(chrono::Utc::now());
+        // Expiry ends remote authorization, not ownership of an exact native
+        // credential slot. Retain these locators until scoped cleanup confirms
+        // deletion; startup must be able to recover interrupted retirement.
         Ok(state)
     }
 
@@ -213,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_session_inventory_round_trips_and_prunes_expiry() {
+    fn remote_session_inventory_preserves_expired_slot_ownership() {
         let directory = tempdir().unwrap();
         let store = StateStore::new(directory.path().join("state.json"));
         let now = Utc::now();
@@ -232,8 +234,9 @@ mod tests {
         )
         .unwrap();
         let state = DesktopState {
-            active_remote_session: Some(future.clone()),
-            pending_remote_revocations: vec![expired, future.clone()],
+            active_remote_session: Some(expired.clone()),
+            pending_candidate_session: Some(expired.clone()),
+            pending_remote_revocations: vec![expired.clone(), future.clone()],
             ..DesktopState::default()
         };
         store.save(&state).unwrap();
@@ -241,8 +244,10 @@ mod tests {
         assert!(!serialized.contains("bearer"));
         assert!(!serialized.contains("token"));
         let loaded = store.load().unwrap();
-        assert_eq!(loaded.active_remote_session, Some(future.clone()));
-        assert_eq!(loaded.pending_remote_revocations, vec![future]);
+        assert_eq!(loaded.active_remote_session, Some(expired.clone()));
+        assert_eq!(loaded.pending_candidate_session, Some(expired.clone()));
+        assert_eq!(loaded.pending_remote_revocations, vec![expired, future]);
+        assert_eq!(loaded.pending_remote_revocation_count(now), 1);
     }
 
     #[test]

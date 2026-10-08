@@ -2,6 +2,7 @@
 
 use super::lifecycle::persist_paused_state;
 use super::*;
+use crate::application::candidate_admission::ensure_candidate_admission;
 use crate::application::sync_terminal::session::admit_user_session_response;
 
 #[path = "../windows/app_shell.rs"]
@@ -88,14 +89,13 @@ use std::{
     io::{Seek, Write},
     mem::size_of,
     os::windows::{
-        ffi::OsStrExt,
         fs::{MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        Arc, Mutex,
     },
     time::Duration,
 };
@@ -123,15 +123,15 @@ use shellx_drive_desktop_core::{
     state_after_confirmed_remote_retirement, sync_pair_id, trashed_remote_response_matches,
     updated_remote_response_matches, upload_staging_root, verify_local_operation_boundary,
     ActivityEntry, BaselineEntry, CredentialStore, DesktopError, DesktopState,
-    DisconnectCleanupIntent, DownloadPrecondition, DownloadPublicationDisposition, DriveHttpClient,
-    ExactCredentialRead, ExactCredentialRemoval, ExactCredentialWrite, ExistingFileTransfer,
-    FolderMovePrecondition, LocalEntry, LocalScanLimits, LoginOutcome, OwnedStagingRoot,
-    PairMarker, PairMarkerDisposition, PendingWindowsCredentialStore, ReadBudget, ReconcilePlan,
-    RemoteEntry, RemoteEntryKind, RemoteFileKind, RemoteMoveTransfer, RemoteSessionRecord,
-    Result as CoreResult, ReviewAction, ReviewDecision, ReviewItem, ReviewKind,
-    StagedCandidateRecoveryAction, StateStore, SyncAction, SyncCycleBudget, SyncPair,
-    SyncPassLimits, SyncRoot, SyncRun, SyncStatus, WindowsCredentialStore,
-    WindowsDirectoryIdentity, CANDIDATE_RECOVERY_PAUSED_ERROR,
+    DisconnectCleanupIntent, DisconnectRequest, DownloadPrecondition,
+    DownloadPublicationDisposition, DriveHttpClient, ExactCredentialRead, ExactCredentialRemoval,
+    ExactCredentialWrite, ExistingFileTransfer, FolderMovePrecondition, LocalEntry,
+    LocalScanLimits, LoginOutcome, OwnedStagingRoot, PairMarker, PairMarkerDisposition,
+    PendingWindowsCredentialStore, ReadBudget, ReconcilePlan, RemoteEntry, RemoteEntryKind,
+    RemoteFileKind, RemoteMoveTransfer, RemoteSessionRecord, Result as CoreResult, ReviewAction,
+    ReviewDecision, ReviewItem, ReviewKind, StagedCandidateRecoveryAction, StateStore, SyncAction,
+    SyncCycleBudget, SyncPair, SyncPassLimits, SyncRoot, SyncRun, SyncStatus,
+    WindowsCredentialStore, WindowsDirectoryIdentity, CANDIDATE_RECOVERY_PAUSED_ERROR,
 };
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
@@ -154,7 +154,6 @@ where
     mutate().await
 }
 use tauri_plugin_notification::NotificationExt;
-const POLL_INTERVAL: Duration = Duration::from_secs(20);
 const OFFLINE_BACKOFF: Duration = Duration::from_secs(60);
 const MAX_DESKTOP_SYNC_PASS_DURATION: Duration = Duration::from_secs(2 * 60 * 60);
 const DESKTOP_SYNC_FREE_SPACE_RESERVE_BYTES: u64 = 512 * 1024 * 1024;
@@ -162,8 +161,12 @@ static NEXT_STAGING_BATCH: AtomicU64 = AtomicU64::new(0);
 
 impl Runtime {
     fn new() -> CoreResult<Self> {
+        let (store, state) = Self::load_state()?;
+        Self::load_connection(store, state)
+    }
+
+    pub(crate) fn load_connection(store: StateStore, mut state: DesktopState) -> CoreResult<Self> {
         let platform = Box::new(crate::platform::windows::WindowsPlatformServices::default());
-        let (store, mut state) = Self::load_state()?;
         if disconnect_cleanup::resume_disconnected_local_cleanup(&store, &mut state).is_err() {
             // The durable journal remains intact. Launch in its Error
             // projection so the user can retry the same exact cleanup
@@ -192,11 +195,16 @@ struct UploadSnapshot {
 #[tauri::command]
 async fn login_password(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     server_url: String,
     email: String,
     password: String,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(user_error)?;
@@ -209,8 +217,20 @@ async fn login_password(
     // password reachable after a replacement login attempt.
     let generation = runtime.auth_offboarding.admit_login().map_err(user_error)?;
     *runtime.pending_login.lock().expect("pending login lock") = None;
+    runtime
+        .ensure_login_matches_retained_pair(client.normalized_url(), &email)
+        .map_err(user_error)?;
+    // Retain this runtime's stop request through the HTTP response and its
+    // terminal publication. Removal cannot retire the catalog entry while a
+    // late response can still need an exact credential recovery locator.
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(user_error)?;
+    if !runtime.auth_offboarding.may_publish(generation) {
+        return Err("Sign-in was canceled; start sign-in again.".to_string());
+    }
+    ensure_candidate_admission(&runtime.coordinator.snapshot()).map_err(user_error)?;
     let outcome = async {
-        runtime.ensure_login_matches_retained_pair(client.normalized_url(), &email)?;
         let outcome = client.login_password(&email, &password).await?;
         Ok::<_, DesktopError>((client, outcome))
     }
@@ -226,7 +246,7 @@ async fn login_password(
     };
     let _publication = runtime.auth_publication.lock().await;
     if !runtime.auth_offboarding.may_publish(generation) {
-        retire_canceled_login(&runtime, &client, &outcome)
+        retire_canceled_login(&runtime, &mut stopped, &client, &outcome)
             .await
             .map_err(user_error)?;
         return Err("Sign-in was canceled by a newer sign-in or disconnect.".to_string());
@@ -240,8 +260,20 @@ async fn login_password(
             ..
         } => {
             *runtime.pending_login.lock().expect("pending login lock") = None;
+            reserve_authenticated_identity(
+                &manager,
+                &runtime,
+                &mut stopped,
+                &client,
+                &bearer_token,
+                &account_email,
+                &session_id,
+                expires_at,
+            )
+            .await?;
             publish_authenticated_session(
                 &runtime,
+                &mut stopped,
                 &client,
                 &bearer_token,
                 &account_email,
@@ -278,12 +310,17 @@ async fn login_password(
 #[tauri::command]
 async fn continue_login(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     email: String,
     password: String,
     totp_code: Option<String>,
     recovery_code: Option<String>,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(user_error)?;
@@ -317,8 +354,17 @@ async fn continue_login(
     if !runtime.auth_offboarding.may_publish(pending.generation) {
         return Err("Sign-in was canceled; start sign-in again.".to_string());
     }
+    runtime
+        .ensure_login_matches_retained_pair(client.normalized_url(), &email)
+        .map_err(user_error)?;
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(user_error)?;
+    if !runtime.auth_offboarding.may_publish(pending.generation) {
+        return Err("Sign-in was canceled; start sign-in again.".to_string());
+    }
+    ensure_candidate_admission(&runtime.coordinator.snapshot()).map_err(user_error)?;
     let outcome = async {
-        runtime.ensure_login_matches_retained_pair(client.normalized_url(), &email)?;
         let outcome = client
             .continue_login(
                 &email,
@@ -333,7 +379,7 @@ async fn continue_login(
     let (client, outcome) = outcome.map_err(user_error)?;
     let _publication = runtime.auth_publication.lock().await;
     if !runtime.auth_offboarding.may_publish(pending.generation) {
-        retire_canceled_login(&runtime, &client, &outcome)
+        retire_canceled_login(&runtime, &mut stopped, &client, &outcome)
             .await
             .map_err(user_error)?;
         return Err("Sign-in was canceled by a newer sign-in or disconnect.".to_string());
@@ -346,8 +392,20 @@ async fn continue_login(
             expires_at,
             ..
         } => {
+            reserve_authenticated_identity(
+                &manager,
+                &runtime,
+                &mut stopped,
+                &client,
+                &bearer_token,
+                &account_email,
+                &session_id,
+                expires_at,
+            )
+            .await?;
             publish_authenticated_session(
                 &runtime,
+                &mut stopped,
                 &client,
                 &bearer_token,
                 &account_email,
@@ -373,9 +431,14 @@ async fn continue_login(
 #[tauri::command]
 async fn set_paused(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     paused: bool,
 ) -> Result<DesktopView, String> {
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
     persist_paused_state(&runtime, paused)
         .await
         .map_err(user_error)?;
@@ -386,10 +449,53 @@ async fn set_paused(
 #[tauri::command]
 async fn disconnect(
     app: tauri::AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
 ) -> Result<DesktopView, String> {
-    disconnect_cleanup::disconnect(app, runtime).await
+    manager.ensure_mutation_allowed().map_err(user_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(user_error)?;
+    disconnect_cleanup::disconnect_impl(&app, &runtime).await
 }
+
+async fn reserve_authenticated_identity(
+    manager: &ConnectionManager,
+    runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
+    client: &DriveHttpClient,
+    bearer_token: &str,
+    account_email: &str,
+    session_id: &str,
+    expires_at: chrono::DateTime<Utc>,
+) -> Result<(), String> {
+    let id = manager
+        .id_for_runtime(runtime)
+        .ok_or_else(|| "That server connection is no longer available.".to_string())?;
+    if let Err(error) = manager.reserve_identity(&id, client.normalized_url(), account_email) {
+        // Reject only this freshly issued session. An existing connection's
+        // canonical credential remains outside the rejected runtime's scope.
+        remote_revocations::retire_unpublished_session(
+            runtime,
+            stopped,
+            client,
+            bearer_token,
+            account_email,
+            session_id,
+            expires_at,
+        )
+        .await
+        .map_err(user_error)?;
+        return Err(user_error(error));
+    }
+    Ok(())
+}
+
+pub(crate) fn start_connection_polling(app: &tauri::AppHandle, runtime: &Arc<Runtime>) {
+    start_polling(app, runtime);
+}
+
+pub(crate) use pair_root_identity::validate_connection_folder_identity;
 
 /// Execute the same confirmation-bound review action as the native UI.
 /// The desktop-agent adapter obtains its confirmation through the shared
@@ -402,6 +508,14 @@ pub(crate) async fn choose_review_action_impl(
     action: ReviewAction,
     confirmation_id: String,
 ) -> Result<DesktopView, String> {
+    sync_runtime::recheck_connection_folders(app, runtime)
+        .await
+        .map_err(user_error)?;
+    let manager = app.state::<ConnectionManager>();
+    let _permit = manager
+        .acquire_sync_permit_for(runtime)
+        .await
+        .map_err(user_error)?;
     runtime
         .require_candidate_recovery_complete()
         .map_err(user_error)?;

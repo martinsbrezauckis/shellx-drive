@@ -32,7 +32,7 @@
       <aside class="manual-tree" aria-label="Drive manual sections">
         <div class="manual-product">
           <h2>ShellX Drive</h2>
-          <span class="manual-version" data-app-version="0.1.13">v0.1.13</span>
+          <span class="manual-version" data-app-version="0.1.14">v0.1.14</span>
         </div>
         <label class="drive-search-label" for="manual-search">Find a section</label>
         <input id="manual-search" class="manual-search" type="search" placeholder="Pair, share, restore…" autocomplete="off" aria-controls="manual-navigation" />
@@ -62,7 +62,7 @@
           <details class="manual-folder" open>
             <summary>Connected devices</summary>
             <a class="manual-node" href="#desktop-install">Install the desktop app</a>
-            <a class="manual-node" href="#desktop-pairing">Pair and add Drive roots</a>
+            <a class="manual-node" href="#desktop-pairing">Add servers and Drive roots</a>
             <a class="manual-node" href="#desktop-sync">Sync, reconnect, and review</a>
             <a class="manual-node" href="#mobile">Drive on your phone</a>
             <a class="manual-node" href="#webdav">WebDAV</a>
@@ -280,17 +280,22 @@ sudo systemctl is-active shellx-drive.service</code></pre>
         </section>
 
         <section id="desktop-pairing" class="manual-section" aria-labelledby="desktop-pairing-heading">
-          <h2 id="desktop-pairing-heading" tabindex="-1">Pair and add Drive roots</h2>
-          <p>Drive connects one signed-in server and account to one chosen local base folder. Up to <strong>100 selected roots</strong> can sync below that folder, with separate safe child folders for owned and shared locations.</p>
+          <h2 id="desktop-pairing-heading" tabindex="-1">Add servers and Drive roots</h2>
+          <p>Connect multiple Drive servers and distinct accounts on the same server. Each connection has its own friendly name, saved sign-in, local folder, sync settings, and status. Up to <strong>100 selected roots per connection</strong> can sync below its local base, with separate safe child folders for owned and shared locations.</p>
           <ol>
-            <li>Prepare a dedicated, empty, ordinary local folder for Drive, separate from other sync tools’ folders.</li>
-            <li>In the desktop app, enter the server’s HTTPS origin and select <strong>Validate</strong>. Complete first-administrator setup in the browser first if the server requests it.</li>
-            <li>Sign in with your account. Enter a TOTP or recovery code when requested.</li>
+            <li>On first launch, choose appearance, <strong>Launch at login</strong>, and the <strong>Default sync check interval</strong> in <strong>App preferences</strong>, then choose <strong>Save and continue</strong>.</li>
+            <li>In <strong>Servers</strong>, choose <strong>Add server</strong>. Enter a friendly name and the server’s HTTPS origin, then select <strong>Validate server</strong>. Complete first-administrator setup in the browser first if the server requests it.</li>
+            <li>Enter <strong>Account email</strong> and <strong>Server password</strong>. Use your current password, including the new password after a change or reset on the server. Enter a TOTP or recovery code only when the account requires it.</li>
             <li>Browse the available owned and shared roots, using the additional pages when needed, and select the first root.</li>
-            <li>Use the native <strong>Choose folder</strong> dialog to select the empty local base and confirm <strong>Connect and start syncing</strong>.</li>
+            <li>Use <strong>Browse…</strong> to select a dedicated empty ordinary local folder in the native folder picker. Keep each connection’s folder separate from other connections and other sync tools.</li>
+            <li>Choose a <strong>Sync check interval</strong> or <strong>Use app default</strong>, then confirm <strong>Connect and start syncing</strong>.</li>
             <li>Wait for <strong>Synced</strong>, then check a small file from each side. A Viewer root supports checking downloads; an editable root supports both directions.</li>
           </ol>
-          <p>Use <strong>Add Drive root</strong> to select another accessible root. Newly granted roots become available for selection; add each one explicitly. <strong>Current status details</strong> shows the chosen root’s summary while every configured root continues syncing.</p>
+          <p>Use <strong>Add Drive root</strong> in a server’s details to select another accessible root. Newly granted roots become available for selection; add each one explicitly. Selecting a server or root changes the displayed details while all configured, unpaused connections keep syncing. Signing in to an already connected server/account offers <strong>Open existing connection</strong>.</p>
+          <p>Click a folder path in <strong>Servers</strong> to open that connection’s local folder, including while paused or awaiting sign-in. Upgrading an existing setup retains its sign-in, local paths, history, pause state, launch preference, and remote-agent enrollment.</p>
+          <h3>Edit a server or replace its folder</h3>
+          <p>Choose <strong>Edit server</strong> from the selected server’s details to change its friendly name or sync check interval. <strong>Update sign-in</strong> renews that same account’s saved session while keeping its folder and settings. Enter the current server password and complete two-factor authentication when requested.</p>
+          <p>To start syncing in a new folder, resolve pending file reviews, select a new separate empty folder with <strong>Browse…</strong>, confirm the fresh sync, and choose <strong>Save server</strong>. Files remain in the old folder while Drive starts syncing in the new folder.</p>
           <p>Keep independent regular files in managed roots. If a symbolic link, reparse point, hard link, or ambiguous path needs review, inspect it and replace it with an ordinary copied file when you want its content synced.</p>
           <figure class="drive-figure drive-figure--desktop">
             <div class="manual-surface"><img src="https://theshellx.com/drive/drive-desktop-dark-v2.webp" alt="ShellX Drive desktop app showing sync status, activity, and the local-folder controls" width="720" height="850" loading="lazy" /></div>
@@ -300,14 +305,17 @@ sudo systemctl is-active shellx-drive.service</code></pre>
 
         <section id="desktop-sync" class="manual-section" aria-labelledby="desktop-sync-heading">
           <h2 id="desktop-sync-heading" tabindex="-1">Sync, reconnect, and review</h2>
-          <p>Work inside the managed child folders. Drive compares and syncs configured roots automatically while it is running. Use <strong>Open folder</strong> to reach your local files, <strong>Sync now</strong> to request a pass, and <strong>Pause</strong> or <strong>Resume</strong> to control transfers. The <strong>Launch at login</strong> setting starts Drive with your desktop session.</p>
+          <p>Work inside the managed child folders. Drive compares and syncs configured roots automatically while it is running. <strong>Open folder</strong> opens the selected connection’s local Drive folder, containing its managed root folders, just like its folder path in <strong>Servers</strong>. Use <strong>Sync now</strong> to request a pass and <strong>Pause sync</strong> or <strong>Resume sync</strong> to control the selected connection’s transfers.</p>
+          <h3>App settings and history</h3>
+          <p><strong>App settings</strong> controls appearance, <strong>Launch at login</strong>, and the <strong>Default sync check interval</strong>. The initial default is <strong>20 seconds</strong>; choices are 20 seconds, 1 minute, 5 minutes, 15 minutes, 30 minutes, and 1 hour. Connections using <strong>Use app default</strong> follow later default changes, while explicit overrides keep their own value. Checks wait for the chosen delay after a pass finishes; offline retries wait at least one minute.</p>
+          <p>The third tab, <strong>History</strong>, combines activity across saved connections. Filter by connection and account, choose a time frame, search for a file, action, or result, and use the page controls to browse retained activity.</p>
           <table class="manual-api-table">
             <caption>Read the desktop status</caption>
             <thead><tr><th scope="col">Status</th><th scope="col">What to do</th></tr></thead>
             <tbody>
               <tr><td>Synced</td><td>The last complete comparison converged. Use this state to check completion of a requested pass.</td></tr>
               <tr><td>Syncing</td><td>A sync pass is active. Wait for its terminal status.</td></tr>
-              <tr><td>Paused</td><td>Choose Resume when you are ready for automatic transfers.</td></tr>
+              <tr><td>Paused</td><td>Choose Resume sync when you are ready for automatic transfers.</td></tr>
               <tr><td>Offline</td><td>Continue local work, restore connectivity, and choose Retry now.</td></tr>
               <tr><td>Needs reconnect</td><td>Use Reconnect to sign in again. Pairing and local files are retained.</td></tr>
               <tr><td>Needs review</td><td>Open the pending decisions and choose the action for the named file or folder.</td></tr>
@@ -315,7 +323,7 @@ sudo systemctl is-active shellx-drive.service</code></pre>
             </tbody>
           </table>
           <h3>Resolve a conflict or deletion</h3>
-          <p>Competing edits preserve both bodies and enter <strong>Needs review</strong>. Use <strong>Open folder</strong> to inspect the named files and conflict copy, reconcile the intended content or safely rename it, and choose <strong>Recheck review</strong>. Deletion reviews offer explicit actions according to the item’s state and your current access.</p>
+          <p>Competing edits preserve both bodies and enter <strong>Needs review</strong>. Use <strong>Open folder</strong>, then open the affected managed root folder to inspect the named files and conflict copy. Reconcile the intended content or safely rename it, and choose <strong>Recheck review</strong>. Deletion reviews offer explicit actions according to the item’s state and your current access.</p>
           <table class="manual-api-table">
             <caption>Deletion review actions, when offered</caption>
             <thead><tr><th scope="col">Action</th><th scope="col">Result</th></tr></thead>
@@ -327,10 +335,10 @@ sudo systemctl is-active shellx-drive.service</code></pre>
             </tbody>
           </table>
           <p>Read the confirmation for the named item and its affected descendants before applying a deletion review. Folder reviews keep their own available recovery choices.</p>
-          <p>Use <strong>Recheck review</strong> after inspecting or safely renaming an item to refresh its pending decision. If the decision belongs to another configured root, open Settings and select that root’s status details. Each review stays attached to its own managed files.</p>
+          <p>Use <strong>Recheck review</strong> after inspecting or safely renaming an item to refresh its pending decision. If the decision belongs to another configured root, open its server’s details and select that root. Each review stays attached to its own managed files.</p>
           <p>While offline, keep your edits inside the managed root. Reconnect and let Drive compare them before editing the same paths on another device. Shared Viewer roots download only; local changes stay available for review. Revoked roots stop remote syncing and retain their local bytes.</p>
-          <h3>Disconnect a device</h3>
-          <p>Before changing server or account, open Settings and choose <strong>Disconnect this PC</strong>. Drive first stops active synchronization safely and retires the saved connection. A confirmed disconnect removes the saved credential and connection metadata while keeping your local synced files.</p>
+          <h3>Remove a server</h3>
+          <p>Choose <strong>Remove server</strong> in the selected server’s details and confirm its name, account, and folder. Drive stops that connection’s active synchronization safely and retires its saved session. Confirmed removal clears its saved credential and connection metadata while keeping local files in their folders. Other connections and app preferences remain available.</p>
           <p>Keep the server reachable during retirement. If the app reports that retirement is unconfirmed, use its retry action and keep the saved state in place until it completes.</p>
         </section>
 
@@ -377,8 +385,8 @@ sudo systemctl is-active shellx-drive.service</code></pre>
         <section id="updates" class="manual-section" aria-labelledby="updates-heading">
           <h2 id="updates-heading" tabindex="-1">Desktop and server updates</h2>
           <h3>Update the desktop</h3>
-          <p>The desktop app checks the official signed update manifest after launch. Open <strong>Settings → Desktop app</strong>, choose <strong>Review update</strong>, check the target version and publisher guidance, then choose <strong>Download and install</strong> to approve that exact update.</p>
-          <p>The app reports download progress and verifies the signed package before handing it to the platform installer. On Windows, macOS, and Linux, use the authenticated platform package and verification requirements described in the <a href="#desktop-install">installation guides</a>.</p>
+          <p>The desktop app checks the official signed update manifest after launch. <strong>App settings</strong> shows the available version, release notes, and signature trust guidance. Choose <strong>Download and install</strong> there to approve that exact displayed update.</p>
+          <p>The app reports download and signature-verification progress, stops connections safely, and hands the verified package to the platform installer before restarting. On Windows, macOS, and Linux, use the authenticated platform package and verification requirements described in the <a href="#desktop-install">installation guides</a>.</p>
           <p>If you enable remote agent control for an enrolled desktop, the authenticated account owner or an account-wide delegated agent can authorize an exact checked, signed update on that device. Grant this access to operators you trust to make that installation choice.</p>
           <h3>Update the server</h3>
           <p>Server administrators review the server release notice and package links. First create a backup and wait for success. Authenticate and stage the new release through the maintained package procedure, stop the active service at the documented step, and run the verified installer from its protected stage. The upgrade retains the configured data root and public origin.</p>
@@ -413,7 +421,7 @@ sudo systemctl is-active shellx-drive.service</code></pre>
             <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/docs/public/CONFIG.md">Server configuration</a></li>
             <li><a href="https://github.com/martinsbrezauckis/shellx-drive/blob/main/SECURITY.md">Security reporting policy</a></li>
           </ul>
-          <p class="manual-note">This manual covers ShellX Drive v0.1.13. Downloads resolve through the official Drive download routes.</p>
+          <p class="manual-note">This manual covers ShellX Drive v0.1.14. Downloads resolve through the official Drive download routes.</p>
           <div class="manual-actions"><a class="manual-button" href="#manual-content">Back to the top</a><a class="manual-button" href="https://theshellx.com/drive/">ShellX Drive</a></div>
         </section>
       </main>

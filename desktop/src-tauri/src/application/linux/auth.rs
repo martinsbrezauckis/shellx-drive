@@ -5,14 +5,14 @@
 //! before the canonical service changes, so an ambiguous keyring write never
 //! silently replaces the retained credential.
 
-mod cancellation;
+pub(super) mod cancellation;
 mod recovery;
 
 use chrono::Utc;
 use serde::Serialize;
 use shellx_drive_desktop_core::{
     classify_exact_credential_removal, classify_exact_credential_write, CredentialStore,
-    DesktopError, DriveHttpClient, ExactCredentialRemoval, ExactCredentialWrite,
+    DesktopError, DisconnectRequest, DriveHttpClient, ExactCredentialRemoval, ExactCredentialWrite,
     LinuxCredentialStore, LoginOutcome, PendingLinuxCredentialStore, RemoteSessionRecord,
     Result as CoreResult,
 };
@@ -21,6 +21,7 @@ use tauri::{AppHandle, State};
 use crate::{
     application::{
         auth_publication::{canceled_sign_in, publish_second_factor},
+        connections::ConnectionManager,
         PendingLogin, Runtime,
     },
     session_identity::SessionIdentity,
@@ -40,11 +41,16 @@ pub(super) struct LoginReply {
 #[tauri::command]
 pub(super) async fn login_password(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     server_url: String,
     email: String,
     password: String,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(present_error)?;
@@ -60,6 +66,20 @@ pub(super) async fn login_password(
     runtime
         .ensure_login_matches_retained_pair(client.normalized_url(), &email)
         .map_err(present_error)?;
+    // A saved connection can renew sign-in while it is syncing. Stop only
+    // that pass before issuing a session and retain the coordinator request
+    // through publication, so a response cannot become an untracked bearer
+    // merely because another pass started in the meantime.
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(present_error)?;
+    if !runtime.auth_offboarding.may_publish(generation) {
+        return Err(present_error(canceled_sign_in()));
+    }
+    crate::application::candidate_admission::ensure_candidate_admission(
+        &runtime.coordinator.snapshot(),
+    )
+    .map_err(present_error)?;
     match client
         .login_password(&email, &password)
         .await
@@ -74,6 +94,8 @@ pub(super) async fn login_password(
         } => {
             publish_authenticated_session(
                 &runtime,
+                &manager,
+                &mut stopped,
                 &client,
                 &bearer_token,
                 &account_email,
@@ -117,12 +139,17 @@ pub(super) async fn login_password(
 #[tauri::command]
 pub(super) async fn continue_login(
     app: AppHandle,
-    runtime: State<'_, Runtime>,
+    manager: State<'_, ConnectionManager>,
+    connection_id: Option<String>,
     email: String,
     password: String,
     totp_code: Option<String>,
     recovery_code: Option<String>,
 ) -> Result<LoginReply, String> {
+    manager.ensure_mutation_allowed().map_err(present_error)?;
+    let runtime = manager
+        .resolve(connection_id.as_deref())
+        .map_err(present_error)?;
     runtime
         .ensure_disconnect_cleanup_complete()
         .map_err(present_error)?;
@@ -147,6 +174,16 @@ pub(super) async fn continue_login(
     runtime
         .ensure_login_matches_retained_pair(client.normalized_url(), &email)
         .map_err(present_error)?;
+    let mut stopped = crate::application::request_disconnect_after_sync(&runtime)
+        .await
+        .map_err(present_error)?;
+    if !runtime.auth_offboarding.may_publish(pending.generation) {
+        return Err(present_error(canceled_sign_in()));
+    }
+    crate::application::candidate_admission::ensure_candidate_admission(
+        &runtime.coordinator.snapshot(),
+    )
+    .map_err(present_error)?;
     match client
         .continue_login(
             &email,
@@ -166,6 +203,8 @@ pub(super) async fn continue_login(
         } => {
             publish_authenticated_session(
                 &runtime,
+                &manager,
+                &mut stopped,
                 &client,
                 &bearer_token,
                 &account_email,
@@ -187,8 +226,12 @@ pub(super) async fn continue_login(
     }
 }
 
+// Keep the transaction's runtime, cancellation and authenticated response inputs explicit.
+#[allow(clippy::too_many_arguments)]
 async fn publish_authenticated_session(
     runtime: &Runtime,
+    manager: &ConnectionManager,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     bearer_token: &str,
     account_email: &str,
@@ -215,6 +258,7 @@ async fn publish_authenticated_session(
     if !runtime.auth_offboarding.may_publish(generation) {
         retire_unpublished_response(
             runtime,
+            stopped,
             client,
             bearer_token,
             &record,
@@ -224,14 +268,41 @@ async fn publish_authenticated_session(
         runtime.refresh_linux_candidate_recovery_pending();
         return Err(canceled_sign_in());
     }
-    runtime.ensure_login_matches_retained_pair(client.normalized_url(), account_email)?;
+    let admission = runtime
+        .ensure_login_matches_retained_pair(client.normalized_url(), account_email)
+        .and_then(|()| {
+            let id = manager.id_for_runtime(runtime).ok_or_else(|| {
+                DesktopError::InvalidState("Drive connection is no longer registered".to_string())
+            })?;
+            manager.reserve_identity(&id, client.normalized_url(), account_email)
+        });
+    if let Err(error) = admission {
+        // A duplicate owns this newly issued session only. Never stage or
+        // retire the other connection's canonical bearer.
+        retire_unpublished_response(
+            runtime,
+            stopped,
+            client,
+            bearer_token,
+            &record,
+            &pending_key.account_key,
+        )
+        .await?;
+        runtime.refresh_linux_candidate_recovery_pending();
+        return Err(error);
+    }
 
     // Persist only the non-secret recovery locator before the pending write.
     // A provider error after committing a Secret Service update must block
     // sync rather than let a later operation guess which bearer survived.
-    let mut operation = runtime.coordinator.begin_lifecycle_operation()?;
-    let mut state = runtime.coordinator.snapshot();
-    state.record_pending_candidate_session(record.clone(), Utc::now());
+    let mut operation = stopped.try_begin()?.ok_or_else(|| {
+        DesktopError::InvalidState("Drive synchronization has not stopped for sign-in".to_string())
+    })?;
+    let mut state = crate::application::candidate_admission::prepare_candidate_state(
+        &runtime.coordinator.snapshot(),
+        &record,
+        Utc::now(),
+    )?;
     runtime.store.save(&state)?;
     operation.publish_persisted_state(state.clone())?;
     runtime.remember_candidate_recovery_record(&record);
@@ -252,6 +323,7 @@ async fn publish_authenticated_session(
     }
 
     recover_prior_candidates(
+        runtime,
         &mut state,
         &pending,
         client,
@@ -262,30 +334,18 @@ async fn publish_authenticated_session(
     .await?;
     runtime.store.save(&state)?;
 
-    // This v0.1 client is intentionally one server/account. Retire every
-    // known old local session before deleting any canonical Secret Service
-    // entry. A transport error leaves both old and candidate records intact.
+    // Retire only this connection's prior canonical session. Other accounts
+    // retain their credentials and pending recovery candidates.
     let canonical = LinuxCredentialStore;
-    for key in LinuxCredentialStore::service_account_keys()? {
-        let Some(previous) = canonical.get(&key)? else {
-            continue;
-        };
-        let previous_identity =
-            SessionIdentity::parse_canonical_credential_key(&key).ok_or_else(|| {
+    if let Some(previous) = canonical.get(&canonical_key)? {
+        if previous != bearer_token {
+            client.logout(&previous).await.map_err(|_| {
                 DesktopError::Credential(
-                    "a saved Drive credential has an invalid identity".to_string(),
+                    "remote session retirement was not confirmed; credentials were kept for retry"
+                        .to_string(),
                 )
             })?;
-        if key == canonical_key && previous == bearer_token {
-            continue;
         }
-        let previous_client = DriveHttpClient::new(&previous_identity.server_url)?;
-        previous_client.logout(&previous).await.map_err(|_| {
-            DesktopError::Credential(
-                "remote session retirement was not confirmed; credentials were kept for retry"
-                    .to_string(),
-            )
-        })?;
     }
 
     // `admit_login` does not wait for an already-running network response.
@@ -320,7 +380,6 @@ async fn publish_authenticated_session(
                 .to_string(),
         ));
     }
-    LinuxCredentialStore::delete_service_credentials_except(&canonical_key)?;
     let removed = pending.delete(&pending_key.account_key);
     let removed_readback = pending.get(&pending_key.account_key);
     if !matches!(
@@ -335,9 +394,10 @@ async fn publish_authenticated_session(
     }
 
     state.publish_active_remote_session(record);
+    let remaining_slots = super::candidate::owned_pending_keys(&state)?;
     crate::application::unix_candidate_recovery::persist_converged_candidate_state(
         &mut state,
-        PendingLinuxCredentialStore::service_account_keys()?,
+        remaining_slots,
         |persisted| runtime.store.save(persisted),
     )?;
     operation.finish_state(state);

@@ -2,6 +2,74 @@ use std::fs;
 
 use super::*;
 
+#[cfg(target_os = "windows")]
+#[test]
+fn long_local_root_preserves_private_staging_and_owned_batch_cleanup() {
+    use std::os::windows::ffi::OsStrExt;
+
+    let directory = tempfile::tempdir().unwrap();
+    let mut parent = directory.path().to_path_buf();
+    while parent.as_os_str().encode_wide().count() < 300 {
+        parent.push("legal-nested-local-root-segment");
+    }
+    fs::create_dir_all(&parent).unwrap();
+    let root = parent.join("Drive");
+    fs::create_dir(&root).unwrap();
+    let untouched = parent.join("unrelated.txt");
+    fs::write(&untouched, b"preserve unrelated sibling").unwrap();
+
+    for (kind, staging) in [
+        ("upload", upload_staging_root(&root).unwrap()),
+        ("download", download_staging_root(&root).unwrap()),
+        ("restore", restore_staging_root(&root).unwrap()),
+    ] {
+        assert!(staging.as_os_str().encode_wide().count() > 260);
+        let area = initialize_owned_staging_root(&root, &staging, kind).unwrap();
+        private_staging::validate_private_directory(area.root()).unwrap();
+        let batch = area.create_batch(1).unwrap();
+        private_staging::validate_private_directory(&batch).unwrap();
+        let body = batch.join("body.txt");
+        fs::write(&body, b"owned temporary body").unwrap();
+        assert_eq!(fs::read(&body).unwrap(), b"owned temporary body");
+        area.remove_batch(&batch).unwrap();
+        assert!(!batch.exists());
+        area.validate_root().unwrap();
+    }
+    assert_eq!(fs::read(&untouched).unwrap(), b"preserve unrelated sibling");
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn windows_api_path_encoding_keeps_absolute_namespaces_and_rejects_traversal() {
+    use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+
+    for (input, expected) in [
+        (r"C:\parent\child", r"\\?\C:\parent\child"),
+        (r"C:/parent/./child", r"\\?\C:\parent\child"),
+        (r"\\server\share\child", r"\\?\UNC\server\share\child"),
+        (r"\\?\C:\parent\child", r"\\?\C:\parent\child"),
+        (r"\\?\UNC\server\share\child", r"\\?\UNC\server\share\child"),
+    ] {
+        let wide = windows_absolute_path_wide(Path::new(input)).unwrap();
+        assert_eq!(wide.last(), Some(&0));
+        assert_eq!(
+            OsString::from_wide(&wide[..wide.len() - 1]),
+            OsStr::new(expected)
+        );
+    }
+    for input in [
+        r"relative\child",
+        r"C:child",
+        r"C:\parent\..\child",
+        r"\\.\C:\child",
+    ] {
+        assert!(windows_absolute_path_wide(Path::new(input)).is_err());
+    }
+    let nul = OsString::from_wide(&[b'C' as u16, b':' as u16, b'\\' as u16, 0, b'x' as u16]);
+    assert!(windows_absolute_path_wide(Path::new(&nul)).is_err());
+}
+
 #[test]
 fn staging_roots_are_namespaced_siblings() {
     let directory = tempfile::tempdir().unwrap();

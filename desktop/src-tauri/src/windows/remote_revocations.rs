@@ -1,9 +1,16 @@
 //! Durable remote-session retirement around mandatory local secret deletion.
 
+#[path = "remote_revocations/direct_retirement.rs"]
+mod direct_retirement;
+#[path = "remote_revocations/prior_candidates.rs"]
+mod prior_candidates;
 #[path = "remote_revocations/staged_candidate.rs"]
 mod staged_candidate;
 
 use super::{pending_session_retirement::*, *};
+use crate::application::candidate_admission::prepare_candidate_state;
+use direct_retirement::retire_bearer;
+use prior_candidates::retire_prior_candidate_sessions;
 
 pub(super) use staged_candidate::{remove_staged_candidate, stage_pending_candidate};
 
@@ -13,6 +20,7 @@ pub(super) fn remove_staged_slot(slot: &ServiceCredentialKey) -> CoreResult<()> 
 
 pub(super) async fn retire_unpublished_session(
     runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     bearer_token: &str,
     account_email: &str,
@@ -31,11 +39,17 @@ pub(super) async fn retire_unpublished_session(
         // recovery. Persist it before touching Credential Manager.
         runtime.remember_candidate_recovery_record(&record);
         runtime.set_candidate_recovery_pending(true);
-        runtime
-            .coordinator
-            .record_pending_candidate_session(record.clone(), Utc::now());
-        runtime.save()?;
-        stage_pending_candidate(client, bearer_token, &record)?;
+        let mut operation = stopped.try_begin()?.ok_or_else(|| {
+            DesktopError::InvalidState(
+                "Drive synchronization has not stopped for sign-in cleanup".to_string(),
+            )
+        })?;
+        let state = prepare_candidate_state(&runtime.coordinator.snapshot(), &record, Utc::now())?;
+        runtime.store.save(&state)?;
+        operation.publish_persisted_state(state.clone())?;
+        let staged = stage_pending_candidate(client, bearer_token, &record);
+        operation.finish_state(state);
+        staged?;
     }
     Ok(())
 }
@@ -54,13 +68,14 @@ pub(super) fn stage_candidate_for_publication(
     // either outcome without publishing into the canonical namespace.
     runtime.remember_candidate_recovery_record(record);
     runtime.set_candidate_recovery_pending(true);
-    state.record_pending_candidate_session(record.clone(), Utc::now());
+    *state = prepare_candidate_state(state, record, Utc::now())?;
     runtime.store.save(state)?;
     stage_pending_candidate(client, bearer_token, record)
 }
 
 pub(super) async fn retire_canceled_login(
     runtime: &Runtime,
+    stopped: &mut DisconnectRequest,
     client: &DriveHttpClient,
     outcome: &LoginOutcome,
 ) -> CoreResult<()> {
@@ -74,6 +89,7 @@ pub(super) async fn retire_canceled_login(
     {
         retire_unpublished_session(
             runtime,
+            stopped,
             client,
             bearer_token,
             account_email,
@@ -83,35 +99,6 @@ pub(super) async fn retire_canceled_login(
         .await?;
     }
     Ok(())
-}
-
-async fn retire_bearer(
-    state: &mut DesktopState,
-    credential: &StoredSessionCredential,
-    record: Option<&RemoteSessionRecord>,
-) -> CoreResult<()> {
-    let outcome = match DriveHttpClient::new(&credential.identity.server_url) {
-        Ok(client) => client.logout(&credential.bearer_token).await,
-        Err(error) => Err(error),
-    };
-    if let Some(record) = confirm_direct_retirement(record.cloned(), outcome)? {
-        state.remove_remote_session_record(&record);
-    }
-    Ok(())
-}
-
-fn preserve_superseded_active(state: &mut DesktopState, candidate: Option<&RemoteSessionRecord>) {
-    let candidate_is_active = candidate.is_some_and(|candidate| {
-        state
-            .active_remote_session
-            .as_ref()
-            .is_some_and(|active| active.same_remote_session(candidate))
-    });
-    if !candidate_is_active {
-        if let Some(active) = state.active_remote_session.take() {
-            state.record_pending_remote_revocation(active, Utc::now());
-        }
-    }
 }
 
 /// Save retry metadata only after every known session can still be retired by
@@ -128,15 +115,17 @@ pub(super) async fn retire_stored_credentials(
         &RemoteSessionRecord,
     )>,
 ) -> CoreResult<()> {
-    state.prune_remote_sessions(Utc::now());
-    let stored = stored_session_credentials(runtime, fallback)?;
+    if let Some((identity, client, bearer_token, record)) = candidate {
+        retire_prior_candidate_sessions(runtime, state, identity, record, client, bearer_token)
+            .await?;
+    }
+    let stored = stored_session_credentials(runtime, state, fallback)?;
     let direct_retirements = direct_retirement_records(state, &stored);
     let direct_records = direct_retirements
         .iter()
         .flatten()
         .cloned()
         .collect::<Vec<_>>();
-    preserve_superseded_active(state, candidate.map(|(_, _, _, record)| record));
 
     let preferred_authorizer = candidate.map(|(identity, _, bearer_token, _)| {
         StoredSessionCredential::candidate(identity, bearer_token)
@@ -174,7 +163,6 @@ pub(super) async fn retire_stored_credentials(
     } else {
         state.active_remote_session = None;
     }
-    state.prune_remote_sessions(Utc::now());
     runtime.store.save(state)
 }
 
@@ -187,15 +175,14 @@ pub(super) async fn retire_failed_candidate(
 ) -> CoreResult<()> {
     match client.logout(bearer_token).await {
         Ok(_) => {
-            // The server confirmed retirement. Persist the exact locator
-            // removal before deleting its staged bearer; a save failure then
-            // retains both the locator and secret for an exact retry.
+            // Keep the exact durable locator until local deletion/readback
+            // succeeds, including when the retired session has expired.
             runtime.remember_candidate_recovery_record(record);
             runtime.set_candidate_recovery_pending(true);
+            remove_staged_candidate(record)?;
             let persisted = state_after_confirmed_remote_retirement(state, record);
             runtime.store.save(&persisted)?;
             *state = persisted;
-            remove_staged_candidate(record)?;
             Ok(())
         }
         Err(_) => {
@@ -204,11 +191,16 @@ pub(super) async fn retire_failed_candidate(
             // serialized startup.
             runtime.remember_candidate_recovery_record(record);
             runtime.set_candidate_recovery_pending(true);
-            state.record_pending_candidate_session(record.clone(), Utc::now());
+            if state
+                .active_remote_session
+                .as_ref()
+                .is_some_and(|active| active.same_remote_session(record))
+            {
+                state.active_remote_session = None;
+            }
+            state.pending_candidate_session = Some(record.clone());
             runtime.store.save(state)?;
             stage_pending_candidate(client, bearer_token, record)?;
-            state.remove_remote_session_record(record);
-            state.record_pending_candidate_session(record.clone(), Utc::now());
             runtime.store.save(state)
         }
     }
